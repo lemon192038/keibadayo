@@ -209,7 +209,7 @@ function oddsOf(r,typ,pk){
  else if(typ=='wide'){for(let d=1;d<=n;d++)if(d!=a&&d!=b)pr+=perm3(p,a,b,d)}
  else if(typ=='trifecta')pr=sq(p,[a,b,c]);
  else pr=perm3(p,a,b,c);
- return Math.min(9999,Math.max(1.1,Math.round(8/pr)/10));
+ return Math.min(9999,Math.max(1,Math.round(8/pr)/10));
 }
 
 /* ---------- レース画面 ---------- */
