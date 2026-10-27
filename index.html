@@ -15,6 +15,8 @@ select{max-width:92%}
 .sc{overflow-x:auto}small{color:#9ab}
 .cm{background:#0a1810;border-radius:8px;padding:8px;margin-top:6px;min-height:84px;line-height:1.5}
 .cm .hot{color:#ff6;font-weight:700;font-size:17px}
+.me{text-align:right}.me span{display:inline-block;background:#2d5a44;border-radius:10px;padding:4px 10px;max-width:85%;text-align:left;word-break:break-all}
+.ot span{display:inline-block;background:#26364a;border-radius:10px;padding:4px 10px;max-width:85%;word-break:break-all}
 </style></head><body><div id="app"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
@@ -50,6 +52,8 @@ let st={tab:'race',rk:'coins',ba:'',bb:'',jk:{}};
 let sel={rid:0,type:'win',picks:[],amt:100,box:false};
 let cart=[];
 let RK={at:0,d:null},PZ={at:0,log:[],titles:[]};
+let CH={list:[],draft:''};
+let DM={list:[],to:'',open:false,draft:'',pl:[],pn:[],lastUn:-1,plAt:0};
 const jn=id=>{const j=(D.jk||[]).find(x=>x.id==id);return j?j.name:'—'};
 
 /* ---------- 効果音(WebAudio) ---------- */
@@ -83,13 +87,14 @@ const SFX={
  hoof(){beep(70+Math.random()*25,.06,'triangle',.07)},
  stretch(){[392,494,587].forEach((f,i)=>beep(f,.15,'sawtooth',.05,i*.1));noise(1.2,.05)},
  goal(){[784,988,1175,1568].forEach((f,i)=>beep(f,.25,'triangle',.08,i*.12));noise(1.5,.06)},
- win(){[1047,1319,1568,2093].forEach((f,i)=>beep(f,.2,'square',.05,i*.09))}
+ win(){[1047,1319,1568,2093].forEach((f,i)=>beep(f,.2,'square',.05,i*.09))},
+ dm(){beep(880,.12,'sine',.07);beep(1175,.15,'sine',.07,.12)}
 };
 
 /* ---------- ログイン ---------- */
 function login(){
  $('#app').innerHTML='<div class=box><h2>🏇 G1 World Classic Glory</h2>'
- +'<input id=u placeholder="アカウント名(英数字)"><input id=pw type=password placeholder="パスワード(6文字以上)">'
+ +'<input id=u maxlength=20 placeholder="アカウント名(英数字・20文字まで)"><input id=pw type=password placeholder="パスワード(6文字以上)">'
  +'<button onclick="auth(0)">ログイン</button><button onclick="auth(1)">新規登録(🪙10000プレゼント)</button></div>';
 }
 async function auth(su){
@@ -99,7 +104,7 @@ async function auth(su){
 }
 sb.auth.onAuthStateChange((_,s)=>{
  me=s?s.user:null;
- if(me){setTimeout(load,0)}else{bonusDone=false;login()}
+ if(me){setTimeout(load,0)}else{bonusDone=false;DM.list=[];DM.lastUn=-1;DM.open=false;login()}
 });
 
 /* ---------- データ読み込み ---------- */
@@ -158,6 +163,8 @@ function setTab(t){
  st.tab=t;render();
  if(t=='rank')loadRank();
  if(t=='prize')loadPrize();
+ if(t=='chat')loadChat();
+ if(t=='dm'){loadPlayers();loadDM()}
 }
 
 /* ---------- レース中の判定(結果の表と払戻しは映像が終わるまで隠す) ---------- */
@@ -178,10 +185,12 @@ function shown(){
 }
 
 /* ---------- 画面全体 ---------- */
+function dmUnread(){return DM.list.filter(m=>m.to_id==me.id&&!m.read).length}
 function render(){
  if(!me||!D.p)return;
- const T={race,zukan,stable,jockey,bets,prize,rank,code,gacha};
- const tabs=[['race','レース'],['zukan','馬図鑑・購入'],['stable','馬房'],['jockey','🏇騎手'],['bets','馬券履歴'],['prize','賞金・称号'],['rank','ランキング'],['code','🎟コード'],['gacha','🎰馬ガチャ']];
+ const T={race,zukan,stable,jockey,bets,prize,rank,code,gacha,chat,dm};
+ const un=dmUnread();
+ const tabs=[['race','レース'],['zukan','馬図鑑・購入'],['stable','馬房'],['jockey','🏇騎手'],['bets','馬券履歴'],['prize','賞金・称号'],['rank','ランキング'],['code','🎟コード'],['gacha','🎰馬ガチャ'],['chat','💬チャット'],['dm','✉️DM'+(un?'('+un+')':'')]];
  $('#app').innerHTML='<header><b>🏇 GWCG</b><span>'+(D.p.title?titleName(D.p.title)+' ':'')+esc(D.p.name)+'</span><span class=c>🪙'+y(shown())+'</span>'
  +'<button onclick="SND=!SND;if(SND)ac();render()">'+(SND?'🔊':'🔇')+'</button>'
  +'<button onclick="sb.auth.signOut()">ログアウト</button></header>'
@@ -474,6 +483,129 @@ async function pull(){
  offerName(parts[1],'🎉 '+parts[0]+' の馬が出ました!');
 }
 
+/* ---------- チャット ---------- */
+function chHtml(){
+ if(!CH.list.length)return '<div><small>まだメッセージがありません。</small></div>';
+ return CH.list.map(m=>'<div><small>'+fmt(m.at)+'</small> <b'+(m.user_id==me.id?' class=c':'')+'>'
+  +(m.title?titleName(m.title)+' ':'')+esc(m.name)+'</b>: '+esc(m.msg)+'</div>').join('');
+}
+function chat(){
+ setTimeout(()=>{const el=$('#chlog');if(el)el.scrollTop=el.scrollHeight},0);
+ return '<div class=card><h3>💬 チャット(全員に見えます)</h3>'
+  +'<div id=chlog class=cm style="max-height:50vh;overflow-y:auto">'+chHtml()+'</div>'
+  +'<input id=chin maxlength=200 placeholder="メッセージ(200文字まで)" value="'+esc(CH.draft)+'" style="width:65%" oninput="CH.draft=this.value" onkeydown="if(event.key==\'Enter\')sendChat()">'
+  +'<button onclick="sendChat()">送信</button></div>';
+}
+async function loadChat(){
+ const {data}=await sb.from('chat').select('*').order('id',{ascending:false}).limit(60);
+ if(!data)return;
+ CH.list=data.reverse();
+ const el=$('#chlog');
+ if(el&&st.tab=='chat'){
+  const nearBottom=el.scrollHeight-el.scrollTop-el.clientHeight<40;
+  el.innerHTML=chHtml();
+  if(nearBottom)el.scrollTop=el.scrollHeight;
+ }
+}
+async function sendChat(){
+ const m=CH.draft.trim();
+ if(!m)return;
+ const {error}=await sb.rpc('post_chat',{m:m});
+ if(error){alert(error.message);return}
+ CH.draft='';
+ const i=$('#chin');if(i)i.value='';
+ loadChat();
+}
+
+/* ---------- DM ---------- */
+function dmPartner(m){return m.from_id==me.id?m.to_name:m.from_name}
+function dmThread(){
+ const t=(DM.to||'').toLowerCase();
+ return DM.list.filter(m=>dmPartner(m).toLowerCase()==t);
+}
+function dmThreadHtml(){
+ const L=dmThread();
+ if(!L.length)return '<div><small>まだメッセージがありません。</small></div>';
+ return L.map(m=>'<div class="'+(m.from_id==me.id?'me':'ot')+'"><small>'+fmt(m.at)+'</small><br><span>'+esc(m.msg)+'</span></div>').join('');
+}
+function dm(){
+ const parts={};
+ DM.list.forEach(m=>{
+  const p=dmPartner(m);
+  if(!parts[p])parts[p]={name:p,last:m.at,un:0};
+  parts[p].last=m.at;
+  if(m.to_id==me.id&&!m.read)parts[p].un++;
+ });
+ const P=Object.values(parts).sort((a,b)=>new Date(b.last)-new Date(a.last));
+ DM.pn=P.map(p=>p.name);
+ const others=DM.pl.filter(n=>n.toLowerCase()!=(D.p.name||'').toLowerCase());
+ let h='<div class=card><h3>✉️ DM(1対1・相手だけに見えます)</h3>'
+  +'<div>相手: <input id=dmto list=dmlist maxlength=20 placeholder="相手のアカウント名" value="'+esc(DM.to)+'" style="width:55%" oninput="DM.to=this.value">'
+  +'<datalist id=dmlist>'+others.map(n=>'<option value="'+esc(n)+'">').join('')+'</datalist>'
+  +'<button onclick="openDM()">開く</button></div>';
+ if(P.length)h+='<div>最近の会話: '+P.map((p,i)=>'<button onclick="DM.to=DM.pn['+i+'];openDM()">'+esc(p.name)+(p.un?' ('+p.un+')':'')+'</button>').join('')+'</div>';
+ if(DM.to&&DM.open){
+  h+='<h4>'+esc(DM.to)+' さんとの会話</h4><div id=dmlog class=cm style="max-height:45vh;overflow-y:auto">'+dmThreadHtml()+'</div>'
+   +'<input id=dmin maxlength=200 placeholder="メッセージ(200文字まで)" value="'+esc(DM.draft)+'" style="width:65%" oninput="DM.draft=this.value" onkeydown="if(event.key==\'Enter\')sendDM()">'
+   +'<button onclick="sendDM()">送信</button>';
+ }
+ h+='</div>';
+ setTimeout(()=>{const el=$('#dmlog');if(el)el.scrollTop=el.scrollHeight},0);
+ return h;
+}
+async function loadPlayers(){
+ if(Date.now()-DM.plAt<30000&&DM.pl.length)return;
+ DM.plAt=Date.now();
+ const {data}=await sb.rpc('players');
+ if(data){DM.pl=data;if(st.tab=='dm'&&document.activeElement.tagName!='INPUT')render()}
+}
+async function loadDM(){
+ if(!me)return;
+ const {data}=await sb.from('dms').select('*').order('id',{ascending:false}).limit(200);
+ if(!data)return;
+ const prevUn=DM.lastUn;
+ DM.list=data.reverse();
+ const cmp=n=>(n||'').toLowerCase();
+ if(st.tab=='dm'&&DM.open&&DM.to&&DM.list.some(m=>m.to_id==me.id&&!m.read&&cmp(dmPartner(m))==cmp(DM.to))){
+  await sb.rpc('mark_read',{p_name:DM.to});
+  DM.list.forEach(m=>{if(m.to_id==me.id&&cmp(dmPartner(m))==cmp(DM.to))m.read=true});
+ }
+ const un=dmUnread();
+ if(prevUn>=0&&un>prevUn)SFX.dm();
+ DM.lastUn=un;
+ if(st.tab=='dm'){
+  const el=$('#dmlog');
+  if(el&&DM.open){
+   const nb=el.scrollHeight-el.scrollTop-el.clientHeight<40;
+   el.innerHTML=dmThreadHtml();
+   if(nb)el.scrollTop=el.scrollHeight;
+  }else if(document.activeElement.tagName!='INPUT'){render()}
+ }else if(un!==prevUn){
+  const tg=document.activeElement.tagName;
+  if(tg!='INPUT'&&tg!='SELECT')render();
+ }
+}
+async function openDM(){
+ const t=(DM.to||'').trim();
+ if(!t){alert('相手の名前を入力してください');return}
+ DM.to=t;DM.open=true;DM.draft='';
+ await loadDM();
+ await sb.rpc('mark_read',{p_name:t});
+ DM.list.forEach(m=>{if(m.to_id==me.id&&dmPartner(m).toLowerCase()==t.toLowerCase())m.read=true});
+ DM.lastUn=dmUnread();
+ render();
+}
+async function sendDM(){
+ const m=DM.draft.trim();
+ if(!m||!DM.to)return;
+ const {error}=await sb.rpc('send_dm',{p_to:DM.to,p_msg:m});
+ if(error){alert(error.message);return}
+ DM.draft='';
+ const i=$('#dmin');if(i)i.value='';
+ await loadDM();
+ render();
+}
+
 /* ---------- レース映像(ドット絵・左回りの楕円コース・ゲート・ウイニングラン) ---------- */
 const SC={'逃げ':{k:.72,d:0},'先行':{k:1.3,d:.5},'差し':{k:2.3,d:2},'追込':{k:3.4,d:4.2}};
 const COL=['#fff','#222','#e33','#36e','#fd2','#2b4','#f93','#f7b','#a5f','#6dd','#a63','#999'];
@@ -633,4 +765,6 @@ setInterval(()=>{
  const tg=document.activeElement.tagName;
  if(me&&tg!='INPUT'&&tg!='SELECT')load();
 },4000);
+setInterval(()=>{if(me&&st.tab=='chat')loadChat()},3000);
+setInterval(()=>{if(me)loadDM()},4000);
 </script></body></html>
