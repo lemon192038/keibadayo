@@ -8,6 +8,7 @@ button{font-size:16px;padding:10px 14px;margin:3px;border:0;border-radius:8px;ba
 button.on{background:#d4a017;color:#000}button.s{background:#a33}.c{color:#ffd34d;font-weight:700}
 main{padding:10px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px;border-bottom:1px solid #2a4;white-space:nowrap}
 .box{max-width:360px;margin:15vh auto;text-align:center}input,select{font-size:18px;padding:10px;margin:6px;border-radius:8px;border:0}input{width:80%}
+select{max-width:92%}
 .card{background:#183626;border-radius:10px;padding:10px;margin:8px 0}
 .n{display:inline-block;min-width:26px;text-align:center;border-radius:50%;background:#fff;color:#000}
 .sel{background:#d4a017;color:#000}canvas{width:100%;border-radius:8px;image-rendering:pixelated}
@@ -41,13 +42,15 @@ const TT=[
  ['SSR','✨ SSR引き当て','伸び×7の馬を所有'],['VET','🛡 ベテラン','所有馬が40戦走り抜く']];
 const titleName=c=>{const t=TT.find(x=>x[0]==c);return t?t[1]:''};
 const fmt=s=>new Date(s).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+const pct=(a,b)=>b?(Math.round(a/b*1000)/10)+'%':'-';
 
 let me=null,bonusDone=false,lastTitle=0,SND=true;
-let D={p:null,races:[],horses:[],bets:[],last:null};
-let st={tab:'race',rk:'coins',ba:'',bb:''};
+let D={p:null,races:[],horses:[],bets:[],jk:[],last:null};
+let st={tab:'race',rk:'coins',ba:'',bb:'',jk:{}};
 let sel={rid:0,type:'win',picks:[],amt:100,box:false};
 let cart=[];
 let RK={at:0,d:null},PZ={at:0,log:[],titles:[]};
+const jn=id=>{const j=(D.jk||[]).find(x=>x.id==id);return j?j.name:'—'};
 
 /* ---------- 効果音(WebAudio) ---------- */
 let AC=null;
@@ -108,12 +111,13 @@ async function load(){
   const bn=await sb.rpc('claim_bonus');
   if(bn.data>0)alert('🎁 ログインボーナス! 🪙'+bn.data+'獲得');
  }
- const [p,r,h,b]=await Promise.all([
+ const [p,r,h,b,j]=await Promise.all([
   sb.from('profiles').select('*').eq('id',me.id).single(),
   sb.from('races').select('*,entries(*)').order('id',{ascending:false}).limit(6),
   sb.from('horses').select('*').order('price',{ascending:false}),
-  sb.from('bets').select('*').order('id',{ascending:false}).limit(40)]);
- D={p:p.data,races:r.data||[],horses:h.data||[],bets:b.data||[],last:null};
+  sb.from('bets').select('*').order('id',{ascending:false}).limit(40),
+  sb.from('jockeys').select('*').order('skill',{ascending:false})]);
+ D={p:p.data,races:r.data||[],horses:h.data||[],bets:b.data||[],jk:j.data||[],last:null};
  render();
  const nw=Date.now();
  if(nw-lastTitle>20000){
@@ -128,6 +132,12 @@ async function load(){
 async function act(fn,a){
  const {error}=await sb.rpc(fn,a);
  if(error)alert(error.message);
+ load();
+}
+async function enterH(id){
+ const jid=st.jk[id]?Number(st.jk[id]):null;
+ const {error}=await sb.rpc('enter_horse',{hid:id,jid:jid});
+ if(error)alert(error.message);else alert('出走登録しました!'+(jid?'\n騎乗: '+jn(jid):''));
  load();
 }
 async function loadRank(){
@@ -162,7 +172,7 @@ function shown(){
  D.bets.filter(b=>b.race_id==r.id).forEach(b=>{c-=b.payout||0});
  (r.entries||[]).filter(e=>e.owner==me.id).forEach(e=>{
   const i=r.result.indexOf(e.gate);
-  if(i>=0&&i<3)c-=Math.round(r.prize*[1,.4,.2][i]);
+  if(i>=0&&i<3){const pz=Math.round(r.prize*[1,.4,.2][i]);c-=pz-Math.floor(pz*(e.jfee||0)/100)}
  });
  return c;
 }
@@ -170,8 +180,8 @@ function shown(){
 /* ---------- 画面全体 ---------- */
 function render(){
  if(!me||!D.p)return;
- const T={race,zukan,stable,bets,prize,rank,code,gacha};
- const tabs=[['race','レース'],['zukan','馬図鑑・購入'],['stable','馬房'],['bets','馬券履歴'],['prize','賞金・称号'],['rank','ランキング'],['code','🎟コード'],['gacha','🎰馬ガチャ']];
+ const T={race,zukan,stable,jockey,bets,prize,rank,code,gacha};
+ const tabs=[['race','レース'],['zukan','馬図鑑・購入'],['stable','馬房'],['jockey','🏇騎手'],['bets','馬券履歴'],['prize','賞金・称号'],['rank','ランキング'],['code','🎟コード'],['gacha','🎰馬ガチャ']];
  $('#app').innerHTML='<header><b>🏇 GWCG</b><span>'+(D.p.title?titleName(D.p.title)+' ':'')+esc(D.p.name)+'</span><span class=c>🪙'+y(shown())+'</span>'
  +'<button onclick="SND=!SND;if(SND)ac();render()">'+(SND?'🔊':'🔇')+'</button>'
  +'<button onclick="sb.auth.signOut()">ログアウト</button></header>'
@@ -221,21 +231,21 @@ function race(){
   rk.slice(0,4).forEach((e,i)=>{MK[e.gate]=mk[i]});
   const rows=E.map(e=>
    '<tr class="'+(sel.picks.includes(e.gate)?'sel':'')+'"><td><span class=n>'+e.gate+'</span><td>'+(MK[e.gate]||'')
-   +'<td>'+esc(e.name)+(e.owner==me.id?' ⭐':'')+'<td>'+esc(e.style)+'<td>'+(CA[e.cond]||'')
+   +'<td>'+esc(e.name)+(e.owner==me.id?' ⭐':'')+'<td>'+esc(jn(e.jockey_id))+'<td>'+esc(e.style)+'<td>'+(CA[e.cond]||'')
    +'<td>'+oddsOf(cur,'win',[e.gate])+'<td>'+oddsOf(cur,'place',[e.gate])
    +(canBet?'<td><button onclick="pick('+e.gate+')">選択</button>':'')+'</tr>').join('');
   h+='<div class=card><h3>'+esc(cur.name)+' <small>(1着賞金🪙'+y(cur.prize)+')</small></h3>'
    +'<div>'+ph+':発走まで <b id=cd class=c></b></div>'
-   +'<div class=sc><table><tr><th>枠<th>印<th>馬名<th>脚質<th>調子<th>単勝<th>複勝'+(canBet?'<th>':'')+'</tr>'+rows+'</table></div></div>';
-  /* パドック */
+   +'<div class=sc><table><tr><th>枠<th>印<th>馬名<th>騎手<th>脚質<th>調子<th>単勝<th>複勝'+(canBet?'<th>':'')+'</tr>'+rows+'</table></div></div>';
   const pad=E.map(e=>{
    const x=HM[e.horse_id]||{recent:[],wins_t:0,wins_d:0,runs_t:0,runs_d:0,turf:0,dirt:0,fatigue:0,age:3};
+   const jk=(D.jk||[]).find(q=>q.id==e.jockey_id);
    const tr=x.runs_t+x.runs_d,tw=x.wins_t+x.wins_d;
    return '<tr><td><span class=n>'+e.gate+'</span><td>'+esc(e.name)+'<td>'+(x.age||3)+'歳<td>'+(CA[e.cond]||'')+' '+(CL[e.cond]||'')
     +'<td>'+((x.recent||[]).join('-')||'-')+'<td>'+(tr?Math.round(tw/tr*100):0)+'%<td>'+(cur.surface=='芝'?x.turf:x.dirt)
-    +'<td>'+x.fatigue+'<td>'+(CMT[e.cond]||'')+'</tr>';
+    +'<td>'+x.fatigue+'<td>'+(jk?esc(jk.name)+' 勝率'+pct(jk.wins,jk.starts):'—')+'<td>'+(CMT[e.cond]||'')+'</tr>';
   }).join('');
-  h+='<div class=card><h3>🐴 パドック</h3><div class=sc><table><tr><th>枠<th>馬名<th>年齢<th>調子<th>近5走<th>勝率<th>'+cur.surface+'適性<th>疲労<th>気配</tr>'+pad+'</table></div></div>';
+  h+='<div class=card><h3>🐴 パドック</h3><div class=sc><table><tr><th>枠<th>馬名<th>年齢<th>調子<th>近5走<th>勝率<th>'+cur.surface+'適性<th>疲労<th>騎手<th>気配</tr>'+pad+'</table></div></div>';
   if(canBet){
    const k=K[sel.type];
    const pv=(!sel.box&&sel.picks.length==k)?oddsOf(cur,sel.type,sel.picks)+'倍':'';
@@ -252,7 +262,7 @@ function race(){
      +'<button onclick="buyCart()">🎫 まとめて購入</button><button class=s onclick="cart=[];render()">空にする</button></div>';
    }
   }else if(left>180){
-   h+='<p>⏳ 馬房タブから所有馬を出走登録できます(登録料200コイン)。</p>';
+   h+='<p>⏳ 馬房タブから所有馬を出走登録できます(登録料200コイン・騎手は任意で依頼できます)。</p>';
   }
  }
  if(D.last){
@@ -260,7 +270,7 @@ function race(){
  }
  if(last){
   h+='<div class=card><h3>前回結果:'+esc(last.name)+'</h3><table>'
-   +last.result.map((g,i)=>{const e=last.entries.find(x=>x.gate==g);return '<tr><td>'+(i+1)+'着<td><span class=n>'+g+'</span> '+esc(e?e.name:'')+'</tr>'}).join('')
+   +last.result.map((g,i)=>{const e=last.entries.find(x=>x.gate==g);return '<tr><td>'+(i+1)+'着<td><span class=n>'+g+'</span> '+esc(e?e.name:'')+'<td>'+esc(e?jn(e.jockey_id):'')+'</tr>'}).join('')
    +'</table>'
    +D.bets.filter(b=>b.race_id==last.id).map(b=>'<div>'+TN[b.type]+' '+b.picks.join('-')+' '+b.amount+'枚 '+b.odds+'倍 → <b class=c>'+(b.settled?'🪙'+y(b.payout):'集計中')+'</b></div>').join('')
    +'</div>';
@@ -307,7 +317,7 @@ async function buyCart(){
 }
 
 /* ---------- 馬図鑑・馬房 ---------- */
-const bar=(v,c)=>'<span style="display:inline-block;width:'+(v*.6)+'px;height:8px;background:'+c+'"></span> '+v;
+const bar=(v,c)=>'<span style="display:inline-block;width:'+Math.min(v,100)*.6+'px;height:8px;background:'+c+'"></span> '+v;
 function hrow(h,btn){
  const tw=h.wins_t+h.wins_d,tr=h.runs_t+h.runs_d;
  return '<tr><td>'+esc(h.name)+(h.retired?' [引退]':'')+'<td>'+esc(h.style)+'<td>'+(h.age||3)+'歳<td>'+(CA[h.cond]||'')
@@ -323,13 +333,19 @@ function zukan(){
 function stable(){
  const m=D.horses.filter(h=>h.owner==me.id);
  if(!m.length)return '<p>所有馬がいません。図鑑から購入するか、ガチャを引きましょう。</p>';
+ const tgt=D.races.filter(r=>r.status=='open').sort((a,b)=>a.id-b.id).find(r=>new Date(r.start_at)-Date.now()>180e3);
+ const busy=new Set(tgt?tgt.entries.filter(e=>e.jockey_id).map(e=>e.jockey_id):[]);
+ const jopt=hid=>'<option value="">騎手なし(報酬0%・補正なし)</option>'+(D.jk||[]).map(j=>
+  '<option value="'+j.id+'"'+(busy.has(j.id)?' disabled':'')+(String(st.jk[hid])==String(j.id)?' selected':'')+'>'
+  +esc(j.name)+' 技'+j.skill+' 報酬'+j.fee_rate+'%'+(busy.has(j.id)?'(騎乗済)':'')+'</option>').join('');
  let h=m.map(x=>{
   const nameBtn=x.named?'':'<button onclick="nameIt('+x.id+')">✏️名前をつける</button>';
   const act1=x.retired?'':
    '<button onclick="act(\'train\',{hid:'+x.id+',stat:\'spd\'})">スピード強化300</button>'
   +'<button onclick="act(\'train\',{hid:'+x.id+',stat:\'sta\'})">スタミナ強化300</button>'
   +'<button onclick="act(\'train\',{hid:'+x.id+',stat:\'pow\'})">パワー強化300</button>'
-  +'<button onclick="act(\'enter_horse\',{hid:'+x.id+'})">🏁 出走登録200</button>'
+  +'<div>騎手: <select onchange="st.jk['+x.id+']=this.value">'+jopt(x.id)+'</select></div>'
+  +'<button onclick="enterH('+x.id+')">🏁 出走登録200</button>'
   +'<button class=s onclick="if(confirm(\'引退させますか?(出走できなくなり、繁殖に使えます)\'))act(\'retire_horse\',{hid:'+x.id+'})">引退</button>';
   return '<div class=card><b>'+esc(x.name)+'</b>'+(x.retired?' <span class=c>[引退]</span>':'')+' '+esc(x.style)+' '+x.age+'歳 '+x.starts+'/40戦 調子'+(CA[x.cond]||'')
   +' 疲労'+x.fatigue+' 価格🪙'+y(x.price)+' 伸び×'+(x.growth||1)
@@ -376,6 +392,20 @@ async function nameIt(id){
  }
 }
 
+/* ---------- 騎手一覧 ---------- */
+function jockey(){
+ const tgt=D.races.filter(r=>r.status=='open').sort((a,b)=>a.id-b.id).find(r=>new Date(r.start_at)-Date.now()>180e3);
+ const busy=new Set(tgt?tgt.entries.filter(e=>e.jockey_id).map(e=>e.jockey_id):[]);
+ let h='<div class=card><h3>🏇 騎手</h3>'
+  +'<p>馬の出走登録のときに、騎手を任意で依頼できます(馬房タブ)。依頼すると馬の強さに補正がかかり、3着以内に入ったときの賞金から報酬率の分が騎手に支払われます。報酬率は最大50%です。</p>'
+  +'<p><small>技術=全体の補正 / スタート=逃げ・先行の馬に効く / 追い=差し・追込の馬に効く / 度胸=G1・G2で効く。連対率は2着以内、3着内率は3着以内に入った割合です。同じ騎手は1つのレースで1頭にしか乗れません。</small></p>'
+  +'<div class=sc><table><tr><th>騎手<th>技術<th>スタート<th>追い<th>度胸<th>勝率<th>連対率<th>3着内率<th>騎乗数<th>近5走<th>報酬率<th>次走</tr>'
+  +(D.jk||[]).map(j=>'<tr><td>'+esc(j.name)+'<td>'+bar(j.skill,'#fc3')+'<td>'+bar(j.start,'#e55')+'<td>'+bar(j.kick,'#5b5')+'<td>'+bar(j.nerve,'#59f')
+   +'<td>'+pct(j.wins,j.starts)+'<td>'+pct(j.places,j.starts)+'<td>'+pct(j.top3,j.starts)+'<td>'+j.starts+'<td>'+((j.recent||[]).join(',')||'-')
+   +'<td class=c>'+j.fee_rate+'%<td>'+(busy.has(j.id)?'騎乗済':'空き')+'</tr>').join('')+'</table></div></div>';
+ return h;
+}
+
 /* ---------- 馬券履歴 ---------- */
 function bets(){
  const rn=running();
@@ -386,11 +416,11 @@ function bets(){
 
 /* ---------- 賞金履歴・称号 ---------- */
 function prize(){
- const L=PZ.log,tot=L.reduce((a,x)=>a+x.amount,0),w=L.filter(x=>x.place==1).length;
+ const L=PZ.log,tot=L.reduce((a,x)=>a+x.amount,0),fee=L.reduce((a,x)=>a+(x.fee||0),0),w=L.filter(x=>x.place==1).length;
  const got=new Set(PZ.titles.map(x=>x.code));
- let h='<div class=card><h3>💰 馬主 賞金履歴</h3><p>累計賞金 <b class=c>🪙'+y(tot)+'</b> / 1着 '+w+'回 / 3着以内 '+L.length+'回(直近200件)</p>';
- h+=L.length?'<div class=sc><table><tr><th>日時<th>レース<th>馬<th>着順<th>賞金</tr>'
-  +L.map(x=>'<tr><td>'+fmt(x.at)+'<td>'+esc(x.race_name)+'<td>'+esc(x.horse_name)+'<td>'+x.place+'着<td>🪙'+y(x.amount)+'</tr>').join('')+'</table></div>'
+ let h='<div class=card><h3>💰 馬主 賞金履歴</h3><p>累計手取り賞金 <b class=c>🪙'+y(tot)+'</b> / 騎手報酬の支払い 🪙'+y(fee)+' / 1着 '+w+'回 / 3着以内 '+L.length+'回(直近200件)</p>';
+ h+=L.length?'<div class=sc><table><tr><th>日時<th>レース<th>馬<th>着順<th>手取り<th>騎手報酬</tr>'
+  +L.map(x=>'<tr><td>'+fmt(x.at)+'<td>'+esc(x.race_name)+'<td>'+esc(x.horse_name)+'<td>'+x.place+'着<td>🪙'+y(x.amount)+'<td>'+(x.fee?'🪙'+y(x.fee):'-')+'</tr>').join('')+'</table></div>'
   :'<p>まだ賞金はありません。所有馬を出走させて、3着以内を目指しましょう。</p>';
  h+='</div><div class=card><h3>🏅 称号('+got.size+'/'+TT.length+')</h3><p>称号を獲得するたびに🪙1000がもらえます。</p>'
   +TT.map(t=>{
@@ -532,9 +562,8 @@ setInterval(()=>{
  });
  const win=H.find(h=>h.pl==0),tw=win?t-GATE_OPEN-win.Tf:-1;
  const rk=[...H].sort((a,b)=>(b.p>=1?100-b.pl:b.p)-(a.p>=1?100-a.pl:a.p)),lead=Math.max(...H.map(h=>h.p));
- /* 実況と効果音 */
  if(CM.rid!=r.id)CM={rid:r.id,flags:{},lines:[],v:0,leader:0,lp:0,lt:0,sp:0,beat:0,snap:null,say:0};
- const F=CM.flags,tn=Date.now(),nm=h=>h.e.gate+'番 '+h.e.name;
+ const F=CM.flags,tn=Date.now(),nm=h=>h.e.gate+'番 '+h.e.name+(h.e.jockey_id?'('+jn(h.e.jockey_id)+')':'');
  if(t-CM.lt>=.5){CM.sp=(lead-CM.lp)/(t-CM.lt);CM.lp=lead;CM.lt=t}
  if(t>=.2&&!F.gin){F.gin=1;say('各馬、ゲートに収まりました。',0);SFX.gate()}
  if(t>=GATE_OPEN&&!F.st){F.st=1;say('ゲートが開いた! 一斉にスタート!',1);SFX.start()}
