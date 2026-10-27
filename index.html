@@ -115,7 +115,7 @@ async function load(){
   sb.from('profiles').select('*').eq('id',me.id).single(),
   sb.from('races').select('*,entries(*)').order('id',{ascending:false}).limit(6),
   sb.from('horses').select('*').order('price',{ascending:false}),
-  sb.from('bets').select('*').order('id',{ascending:false}).limit(40),
+  sb.from('bets').select('*').order('id',{ascending:false}).limit(120),
   sb.from('jockeys').select('*').order('skill',{ascending:false})]);
  D={p:p.data,races:r.data||[],horses:h.data||[],bets:b.data||[],jk:j.data||[],last:null};
  render();
