@@ -28,6 +28,7 @@ sb.auth.onAuthStateChange((_,s)=>{me=s?s.user:null;me?load():login()});
 
 async function load(){
  await sb.rpc('tick');
+ const bn=await sb.rpc('claim_bonus');if(bn.data>0)alert('🎁 ログインボーナス! 🪙'+bn.data+'獲得');
  const [p,r,h,b]=await Promise.all([sb.from('profiles').select('*').eq('id',me.id).single(),
   sb.from('races').select('*,entries(*)').order('id',{ascending:false}).limit(6),
   sb.from('horses').select('*').order('price',{ascending:false}),
@@ -36,9 +37,9 @@ async function load(){
 async function act(fn,a){const {error}=await sb.rpc(fn,a);if(error)alert(error.message);load()}
 
 function render(){ if(!me||!D.p)return;
- const T={race,zukan,stable,bets};
+ const T={race,zukan,stable,bets,code};
  $('#app').innerHTML=`<header><b>🏇 GWCG</b><span>${D.p.name}</span><span class=c>🪙${y(D.p.coins)}</span><button onclick="sb.auth.signOut()">ログアウト</button></header>
- <nav>${[['race','レース'],['zukan','馬図鑑・購入'],['stable','馬房'],['bets','馬券履歴']].map(([k,v])=>`<button class="${st.tab==k?'on':''}" onclick="st.tab='${k}';render()">${v}</button>`).join('')}</nav><main>${T[st.tab]()}</main>`;
+ <nav>${[['race','レース'],['zukan','馬図鑑・購入'],['stable','馬房'],['bets','馬券履歴'],['code','🎟コード']].map(([k,v])=>`<button class="${st.tab==k?'on':''}" onclick="st.tab='${k}';render()">${v}</button>`).join('')}</nav><main>${T[st.tab]()}</main>`;
  if(st.tab=='race')prev()}
 
 const es=r=>[...r.entries].sort((a,b)=>a.gate-b.gate);
@@ -88,4 +89,8 @@ setInterval(()=>{const c=$('#cv'),r=D.last;if(!c||!r)return;const E=es(r),g=c.ge
   g.beginPath();g.arc(x,yy,10,0,7);g.fillStyle='#f5c518';g.fill();g.fillStyle='#000';g.fillText(e.gate,x-4,yy+4);g.fillStyle='#fff';g.fillText(e.name,x+14,yy+4)})},60);
 setInterval(()=>{const c=$('#cd'),o=D.races.filter(r=>r.status=='open').sort((a,b)=>a.id-b.id)[0];if(c&&o){const s=Math.max(0,Math.floor((new Date(o.start_at)-Date.now())/1000));c.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}},500);
 setInterval(()=>{if(me&&document.activeElement.tagName!='INPUT')load()},4000);
+ function code(){return `<div class=card><h3>🎟 コード入力</h3><p>コードは1アカウントにつき1回、🪙10000です。</p>
+<input id=cd2 placeholder="GWCG-XXXXXXXX" style="width:70%"><button onclick="redeem()">決定</button></div>`}
+async function redeem(){const v=$('#cd2').value;const {data,error}=await sb.rpc('redeem_code',{c:v});
+ if(error)alert(error.message);else alert(data+' 🪙10000を獲得しました');load()}
 </script></body></html>
