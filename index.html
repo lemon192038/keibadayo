@@ -39,9 +39,9 @@ async function load(){
 async function act(fn,a){const {error}=await sb.rpc(fn,a);if(error)alert(error.message);load()}
 
 function render(){ if(!me||!D.p)return;
- const T={race,zukan,stable,bets,code};
+ const T={race,zukan,stable,bets,code,gacha};
  $('#app').innerHTML=`<header><b>🏇 GWCG</b><span>${D.p.name}</span><span class=c>🪙${y(shown())}</span><button onclick="sb.auth.signOut()">ログアウト</button></header>
- <nav>${[['race','レース'],['zukan','馬図鑑・購入'],['stable','馬房'],['bets','馬券履歴'],['code','🎟コード']].map(([k,v])=>`<button class="${st.tab==k?'on':''}" onclick="st.tab='${k}';render()">${v}</button>`).join('')}</nav><main>${T[st.tab]()}</main>`;
+ <nav>${[['race','レース'],['zukan','馬図鑑・購入'],['stable','馬房'],['bets','馬券履歴'],['code','🎟コード'],['gacha','🎰馬ガチャ']].map(([k,v])=>`<button class="${st.tab==k?'on':''}" onclick="st.tab='${k}';render()">${v}</button>`).join('')}</nav><main>${T[st.tab]()}</main>`;
  if(st.tab=='race')prev()}
 
 const es=r=>[...r.entries].sort((a,b)=>a.gate-b.gate);
@@ -81,7 +81,7 @@ function zukan(){return `<div style="overflow-x:auto"><table>${HEAD}${D.horses.m
 function stable(){const m=D.horses.filter(h=>h.owner==me.id);if(!m.length)return'<p>所有馬がいません。図鑑から購入しましょう。</p>';
  return m.map(h=>`<div class=card><b>${h.name}</b> ${h.style} 疲労${h.fatigue} 価格🪙${y(h.price)}<table>${HEAD}${hrow(h,'')}</table>
  <button onclick="act('train',{hid:${h.id},stat:'spd'})">スピード強化300</button><button onclick="act('train',{hid:${h.id},stat:'sta'})">スタミナ強化300</button><button onclick="act('train',{hid:${h.id},stat:'pow'})">パワー強化300</button>
- <button onclick="act('enter_horse',{hid:${h.id}})">🏁 出走登録200</button><button class=s onclick="if(confirm('売却(価格の60%)'))act('sell_horse',{hid:${h.id}})">売却</button></div>`).join('')}
+ ${h.named?'':<button onclick="nameIt(${h.id})">✏️名前をつける</button>}<button onclick="act('enter_horse',{hid:${h.id}})">🏁 出走登録200</button><button class=s onclick="if(confirm('売却(価格の60%)'))act('sell_horse',{hid:${h.id}})">売却</button></div>`).join('')}
 function bets(){return `<table><tr><th>レース<th>種別<th>買い目<th>金額<th>オッズ<th>払戻</tr>${D.bets.map(b=>`<tr><td>${b.race_id%10000}<td>${TN[b.type]}<td>${b.picks.join('-')}<td>${b.amount}<td>${b.odds}<td>${b.settled&&!(running()&&running().id==b.race_id)?y(b.payout):'待機中'}</tr>`).join('')}</table>`}
 
 // レースアニメーション(結果に基づく)
@@ -98,4 +98,19 @@ setInterval(()=>{if(me&&document.activeElement.tagName!='INPUT')load()},4000);
 <input id=cd2 placeholder="GWCG-XXXXXXXX" style="width:70%"><button onclick="redeem()">決定</button></div>`}
 async function redeem(){const v=$('#cd2').value;const {data,error}=await sb.rpc('redeem_code',{c:v});
  if(error)alert(error.message);else alert(data);load()}
+ function gacha(){return `<div class=card><h3>🎰 馬ガチャ(1回 🪙5000)</h3>
+<p>排出馬は能力が低い代わりに、調教での伸びが大きい馬です。</p>
+<p>N 60% (伸び×3) / R 28% (×4) / SR 10% (×5) / SSR 2% (×7)</p>
+<p>引いた馬は「馬房」タブで名前をつけられます。</p>
+<button onclick="pull()">🎰 ガチャを引く(5000)</button></div>`}
+async function pull(){if(!confirm('5000コインで引きますか?'))return;
+ const {data,error}=await sb.rpc('gacha');
+ if(error){alert(error.message);return}
+ const [rk,id]=data.split(':');
+ await load();
+ const nm=prompt(`🎉 ${rk} の馬が出ました!\n名前をつけてください(1〜20文字)`);
+ if(nm&&nm.trim()){const r=await sb.rpc('name_horse',{hid:Number(id),nm});if(r.error)alert(r.error.message);load()}
+ else alert('あとで「馬房」タブから名前をつけられます')}
+async function nameIt(id){const nm=prompt('名前をつけてください(1〜20文字・変更は1回だけ)');
+ if(nm&&nm.trim()){const r=await sb.rpc('name_horse',{hid:id,nm});if(r.error)alert(r.error.message);load()}}
 </script></body></html>
