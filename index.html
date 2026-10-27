@@ -13,8 +13,8 @@ main{padding:10px}table{width:100%;border-collapse:collapse;font-size:14px}td,th
 </style></head><body><div id="app"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
-const URL='https://cntqlqvnruanmawtxiyp.supabase.co/', KEY='sb_publishable_28BRrTAEoLeyOgcOCvc9FA_hg5Ej2wC';
-const sb=supabase.createClient(https://cntqlqvnruanmawtxiyp.supabase.co/,sb_publishable_28BRrTAEoLeyOgcOCvc9FA_hg5Ej2wC),$=s=>document.querySelector(s),y=n=>Number(n).toLocaleString();
+const SB_URL='https://cntqlqvnruanmawtxiyp.supabase.co/', KEY='sb_publishable_28BRrTAEoLeyOgcOCvc9FA_hg5Ej2wC';
+const sb=supabase.createClient(SB_URL,KEY),$=s=>document.querySelector(s),y=n=>Number(n).toLocaleString();
 const TN={win:'単勝',exacta:'馬単',quinella:'馬連',trifecta:'3連単',trio:'3連複'},K={win:1,exacta:2,quinella:2,trifecta:3,trio:3};
 let me=null,D={races:[],horses:[],bets:[]},st={tab:'race'},sel={rid:0,type:'win',picks:[],amt:100};
 
