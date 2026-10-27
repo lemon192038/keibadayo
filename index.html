@@ -17,7 +17,9 @@ const SB_URL='https://cntqlqvnruanmawtxiyp.supabase.co', KEY='sb_publishable_28B
 const sb=supabase.createClient(SB_URL,KEY),$=s=>document.querySelector(s),y=n=>Number(n).toLocaleString();
 const TN={win:'単勝',exacta:'馬単',quinella:'馬連',trifecta:'3連単',trio:'3連複'},K={win:1,exacta:2,quinella:2,trifecta:3,trio:3};
 let me=null,D={races:[],horses:[],bets:[]},st={tab:'race'},sel={rid:0,type:'win',picks:[],amt:100};
-
+const RS=30e3;
+function running(){const dn=D.races.filter(r=>r.status=='done');return dn[0]&&Date.now()-new Date(dn[0].start_at)<RS?dn[0]:null}
+function shown(){let c=Number(D.p.coins);const r=running();if(!r)return c;D.bets.filter(b=>b.race_id==r.id).forEach(b=>c-=b.payout||0);r.entries.filter(e=>e.owner==me.id).forEach(e=>{const i=r.result.indexOf(e.gate);if(i>=0&&i<3)c-=Math.round(r.prize*[1,.4,.2][i])});return c}
 function login(){$('#app').innerHTML=`<div class=box><h2>🏇 G1 World Classic Glory</h2>
 <input id=u placeholder="アカウント名(英数字)"><input id=pw type=password placeholder="パスワード(6文字以上)">
 <button onclick="auth(0)">ログイン</button><button onclick="auth(1)">新規登録(🪙10000プレゼント)</button></div>`}
@@ -38,15 +40,16 @@ async function act(fn,a){const {error}=await sb.rpc(fn,a);if(error)alert(error.m
 
 function render(){ if(!me||!D.p)return;
  const T={race,zukan,stable,bets,code};
- $('#app').innerHTML=`<header><b>🏇 GWCG</b><span>${D.p.name}</span><span class=c>🪙${y(D.p.coins)}</span><button onclick="sb.auth.signOut()">ログアウト</button></header>
+ $('#app').innerHTML=`<header><b>🏇 GWCG</b><span>${D.p.name}</span><span class=c>🪙${y(shown())}</span><button onclick="sb.auth.signOut()">ログアウト</button></header>
  <nav>${[['race','レース'],['zukan','馬図鑑・購入'],['stable','馬房'],['bets','馬券履歴'],['code','🎟コード']].map(([k,v])=>`<button class="${st.tab==k?'on':''}" onclick="st.tab='${k}';render()">${v}</button>`).join('')}</nav><main>${T[st.tab]()}</main>`;
  if(st.tab=='race')prev()}
 
 const es=r=>[...r.entries].sort((a,b)=>a.gate-b.gate);
 function wo(r){const t=r.entries.reduce((a,e)=>a+e.str,0);return e=>Math.min(9999,Math.max(1.1,Math.round(8/(e.str/t))/10))}
 function race(){
- const now=Date.now(),open=D.races.filter(r=>r.status=='open').sort((a,b)=>a.id-b.id),cur=open[0],last=D.races.find(r=>r.status=='done');
- D.last=last&&now-new Date(last.start_at)<30e3?last:null;
+ const now=Date.now(),open=D.races.filter(r=>r.status=='open').sort((a,b)=>a.id-b.id),cur=open[0],dn=D.races.filter(r=>r.status=='done');
+ D.last=running();
+ const last=D.last?dn[1]:dn[0];
  let h='';
  if(cur){const left=(new Date(cur.start_at)-now)/1000,ph=left>180?'出走登録受付中':left>15?'ベット受付中':'締切';
   if(sel.rid!=cur.id)sel={rid:cur.id,type:sel.type,picks:[],amt:sel.amt};
@@ -59,7 +62,8 @@ function race(){
   ${[100,500,1000,5000].map(a=>`<button class="${sel.amt==a?'on':''}" onclick="sel.amt=${a};render()">${a}</button>`).join('')}
   <button onclick="bet()">🎫 ベットする(🪙${y(sel.amt)})</button></div>`;
   else if(left>180)h+=`<p>⏳ 馬房タブから所有馬を出走登録できます(登録料200コイン)。</p>`}
- if(last){h+=`<div class=card><h3>前回結果:${last.name}</h3>${D.last?'<canvas id=cv></canvas>':''}
+  if(D.last)h+=`<div class=card><h3>🏁 レース中:${D.last.name}</h3><canvas id=cv></canvas><p>結果発表をお待ちください…</p></div>`;
+ if(last){h+=`<div class=card><h3>前回結果:${last.name}</h3>
   <table>${last.result.map((g,i)=>`<tr><td>${i+1}着<td><span class=n>${g}</span> ${last.entries.find(e=>e.gate==g).name}</tr>`).join('')}</table>
   ${D.bets.filter(b=>b.race_id==last.id).map(b=>`<div>${TN[b.type]} ${b.picks.join('-')} ${b.amount}枚 ${b.odds}倍 → <b class=c>${b.settled?'🪙'+y(b.payout):'集計中'}</b></div>`).join('')}</div>`}
  return h}
@@ -78,7 +82,7 @@ function stable(){const m=D.horses.filter(h=>h.owner==me.id);if(!m.length)return
  return m.map(h=>`<div class=card><b>${h.name}</b> ${h.style} 疲労${h.fatigue} 価格🪙${y(h.price)}<table>${HEAD}${hrow(h,'')}</table>
  <button onclick="act('train',{hid:${h.id},stat:'spd'})">スピード強化300</button><button onclick="act('train',{hid:${h.id},stat:'sta'})">スタミナ強化300</button><button onclick="act('train',{hid:${h.id},stat:'pow'})">パワー強化300</button>
  <button onclick="act('enter_horse',{hid:${h.id}})">🏁 出走登録200</button><button class=s onclick="if(confirm('売却(価格の60%)'))act('sell_horse',{hid:${h.id}})">売却</button></div>`).join('')}
-function bets(){return `<table><tr><th>レース<th>種別<th>買い目<th>金額<th>オッズ<th>払戻</tr>${D.bets.map(b=>`<tr><td>${b.race_id%10000}<td>${TN[b.type]}<td>${b.picks.join('-')}<td>${b.amount}<td>${b.odds}<td>${b.settled?y(b.payout):'待機中'}</tr>`).join('')}</table>`}
+function bets(){return `<table><tr><th>レース<th>種別<th>買い目<th>金額<th>オッズ<th>払戻</tr>${D.bets.map(b=>`<tr><td>${b.race_id%10000}<td>${TN[b.type]}<td>${b.picks.join('-')}<td>${b.amount}<td>${b.odds}<td>${b.settled&&!(running()&&running().id==b.race_id)?y(b.payout):'待機中'}</tr>`).join('')}</table>`}
 
 // レースアニメーション(結果に基づく)
 const SP={逃げ:.85,先行:.95,差し:1.08,追込:1.2};
@@ -88,6 +92,7 @@ setInterval(()=>{const c=$('#cv'),r=D.last;if(!c||!r)return;const E=es(r),g=c.ge
   g.fillStyle=r.surface=='芝'?'#2f7a3a':'#8a6a3c';g.fillRect(0,yy-11,760,22);g.fillStyle='#fff';g.fillRect(670,yy-11,3,22);
   g.beginPath();g.arc(x,yy,10,0,7);g.fillStyle='#f5c518';g.fill();g.fillStyle='#000';g.fillText(e.gate,x-4,yy+4);g.fillStyle='#fff';g.fillText(e.name,x+14,yy+4)})},60);
 setInterval(()=>{const c=$('#cd'),o=D.races.filter(r=>r.status=='open').sort((a,b)=>a.id-b.id)[0];if(c&&o){const s=Math.max(0,Math.floor((new Date(o.start_at)-Date.now())/1000));c.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}},500);
+ setInterval(()=>{if(D.last&&!running()){D.last=null;render()}},1000);
 setInterval(()=>{if(me&&document.activeElement.tagName!='INPUT')load()},4000);
  function code(){return `<div class=card><h3>🎟 コード入力</h3><p>コードは1アカウントにつき1回、🪙10000です。</p>
 <input id=cd2 placeholder="GWCG-XXXXXXXX" style="width:70%"><button onclick="redeem()">決定</button></div>`}
