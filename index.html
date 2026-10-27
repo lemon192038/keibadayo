@@ -112,5 +112,6 @@ async function pull(){if(!confirm('5000コインで引きますか?'))return;
  if(nm&&nm.trim()){const r=await sb.rpc('name_horse',{hid:Number(id),nm});if(r.error)alert(r.error.message);load()}
  else alert('あとで「馬房」タブから名前をつけられます')}
 async function nameIt(id){const nm=prompt('名前をつけてください(1〜20文字・変更は1回だけ)');
- if(nm&&nm.trim()){const r=await sb.rpc('name_horse',{hid:id,nm});if(r.error)alert(r.error.message);load()}}
+ if(nm&&nm.trim()){const r=await sb.rpc('name_horse',{hid:id,nm});if(r.error)alert(r.error.message);load()}
+}
 </script></body></html>
