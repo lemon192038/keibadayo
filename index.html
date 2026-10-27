@@ -92,5 +92,5 @@ setInterval(()=>{if(me&&document.activeElement.tagName!='INPUT')load()},4000);
  function code(){return `<div class=card><h3>🎟 コード入力</h3><p>コードは1アカウントにつき1回、🪙10000です。</p>
 <input id=cd2 placeholder="GWCG-XXXXXXXX" style="width:70%"><button onclick="redeem()">決定</button></div>`}
 async function redeem(){const v=$('#cd2').value;const {data,error}=await sb.rpc('redeem_code',{c:v});
- if(error)alert(error.message);else alert(data+' 🪙10000を獲得しました');load()}
+ if(error)alert(error.message);else alert(data);load()}
 </script></body></html>
