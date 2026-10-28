@@ -8,6 +8,7 @@ button{font-size:16px;padding:10px 14px;margin:3px;border:0;border-radius:8px;ba
 button.on{background:#d4a017;color:#000}button.s{background:#a33}.c{color:#ffd34d;font-weight:700}
 main{padding:10px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px;border-bottom:1px solid #2a4;white-space:nowrap}
 .box{max-width:360px;margin:15vh auto;text-align:center}input,select{font-size:18px;padding:10px;margin:6px;border-radius:8px;border:0}input{width:80%}
+input[type=checkbox]{width:22px;height:22px;margin:0}
 select{max-width:92%}
 .card{background:#183626;border-radius:10px;padding:10px;margin:8px 0}
 .n{display:inline-block;min-width:26px;text-align:center;border-radius:50%;background:#fff;color:#000}
@@ -65,6 +66,7 @@ const ADM=new Set(['ADMIN','admin','βテスター','競馬狂','バニーガー
 const tn=n=>n?'<span class="'+(ADM.has(n)?'rb':'c')+'">'+esc(n)+'</span>':'';
 const RKI={N:0,R:1,RR:2,RRR:3,SR:4,SSR:5,HR:6,UR:7,OG:8};
 const RKC={N:'#9aa',R:'#4af',RR:'#4d8',RRR:'#c6f',SR:'#fc3',SSR:'#f6c',HR:'#f84',UR:'#fff',OG:'#fff'};
+const RKL=['N','R','RR','RRR','SR','SSR','HR','UR','OG'];
 const PC=['#f33','#fa0','#ee0','#3d3','#0cf','#55f','#c4f','#fff'];
 const rkt=rk=>!rk?'':(RKI[rk]>=4?'<b class=rb>['+esc(rk)+']</b>':'<span class=tag style="color:'+(RKC[rk]||'#fff')+'">'+esc(rk)+'</span>');
 
@@ -79,6 +81,7 @@ let CH={list:[],draft:''};
 let DM={list:[],to:'',open:false,draft:'',pl:[],pn:[],lastUn:-1,plAt:0};
 let IT={items:[],inv:[],buffs:[],shop:null};
 let AW={defs:[],t:new Set(),a:new Set(),at:0,kind:'title',f:'all',page:0,q:'',draft:''};
+let BK={open:false,mode:'sell',max:'N',ex:new Set(),sel:null};
 let TUT={on:false,step:0,shown:false};
 let IC={};
 const jn=id=>{const j=(D.jk||[]).find(x=>x.id==id);return j?j.name:'—'};
@@ -235,7 +238,7 @@ async function loadInner(){
  if(!IT.items.length){const r=await sb.from('items').select('*').order('id');IT.items=r.data||[]}
  const races=(ro.data||[]).concat(rd.data||[]);
  let hs=mh.data||[];
- if(st.tab=='race'){
+ if(st.tab=='race'||st.tab=='watch'){
   const have=new Set(hs.map(x=>x.id));
   const ids=[...new Set(races.flatMap(r=>r.entries.map(e=>e.horse_id)))].filter(i=>!have.has(i));
   if(ids.length){const eh=await sb.from('horses').select('*').in('id',ids);hs=hs.concat(eh.data||[])}
@@ -258,6 +261,7 @@ async function loadInner(){
  if(st.tab=='rank'&&nw-RK.at>15000)loadRank();
  if(st.tab=='prize'&&nw-PZ.at>15000)loadPrize();
  if(st.tab=='award'&&nw-AW.at>15000)loadAwards();
+ if(st.tab=='shop'&&IT.shop&&nw-(IT.shopAt||0)>8000)loadShop();
 }
 async function act(fn,a){
  const {error}=await sb.rpc(fn,a);
@@ -299,12 +303,13 @@ async function loadAwards(){
 async function loadShop(){
  const {data,error}=await sb.rpc('shop_list');
  if(error){alert(error.message);return}
+ IT.shopAt=Date.now();
  IT.shop=data;
- if(st.tab=='shop')render();
+ if(st.tab=='shop'&&document.activeElement.tagName!='SELECT')render();
 }
 function setTab(t){
  st.tab=t;render();
- if(t=='race')load();
+ if(t=='race'||t=='watch')load();
  if(t=='zukan')loadZukan();
  if(t=='rank')loadRank();
  if(t=='prize')loadPrize();
@@ -335,9 +340,9 @@ function shown(){
 function dmUnread(){return DM.list.filter(m=>m.to_id==me.id&&!m.read).length}
 function render(){
  if(!me||!D.p)return;
- const T={race,zukan,stable,bag,shop,jockey,bets,prize,award,rank,code,gacha,chat,dm,profile};
+ const T={race,watch,zukan,stable,bag,shop,jockey,bets,prize,award,rank,code,gacha,chat,dm,profile};
  const un=dmUnread();
- const tabs=[['race','レース'],['zukan','馬図鑑・購入'],['stable','馬房'],['bag','🎒バッグ'],['shop','🛒ショップ'],['jockey','🏇騎手'],['bets','馬券履歴'],['prize','賞金履歴'],['award','🏅称号・実績'],['rank','ランキング'],['code','🎟コード'],['gacha','🎰ガチャ'],['chat','💬チャット'],['dm','✉️DM'+(un?'('+un+')':'')],['profile','👤プロフィール']];
+ const tabs=[['race','レース'],['watch','📺レース観戦'],['zukan','馬図鑑・購入'],['stable','馬房'],['bag','🎒バッグ'],['shop','🛒ショップ'],['jockey','🏇騎手'],['bets','馬券履歴'],['prize','賞金履歴'],['award','🏅称号・実績'],['rank','ランキング'],['code','🎟コード'],['gacha','🎰ガチャ'],['chat','💬チャット'],['dm','✉️DM'+(un?'('+un+')':'')],['profile','👤プロフィール']];
  $('#app').innerHTML='<header><span onclick="setTab(\'profile\')" style="cursor:pointer">'+ico(me.id,34)+'</span><b>🏇 GWCG</b><span>'+(D.p.title_name?tn(D.p.title_name)+' ':'')+esc(D.p.name)+'</span><span class=c>🪙'+y(shown())+'</span>'
  +'<button onclick="startTut()">❓</button>'
  +'<button onclick="SND=!SND;if(SND)ac();render()">'+(SND?'🔊':'🔇')+'</button>'
@@ -350,17 +355,18 @@ function render(){
 const TS=[
  ['race','🎉 ようこそ!','G1 World Classic Glory へようこそ。新規登録のプレゼントで🪙10000を持っています。上のタブで機能を切り替えます。このガイドは、右上の「スキップ」でいつでも終えられます。後から、ヘッダーの「❓」でもう一度見られます。'],
  ['race','🗓 レーススケジュール','レースは90秒ごとに開催されます。「表」は芝、「裏」はダートで、交互に行われます。1開催日は表裏それぞれ12Rで、平日はG3、土曜はG2、日曜はG1がメインレースです。「見る」を押すと、そのレースの出走表が見られます。'],
+ ['watch','📺 レース観戦','発走すると、このタブでレース映像と実況が見られます。レースの合間は、次のレースまでのカウントダウンと、直近の結果が出ます。'],
  ['race','🎫 馬券の買い方','ベットは発走の3分前から15秒前までです。種類は単勝(1着)、複勝(3着以内)、馬単(1→2着の順)、馬連(1・2着の組)、ワイド(3着以内の2頭)、3連単(1→2→3着の順)、3連複(1〜3着の組)です。オッズが高いほど、的中したときの払戻しが増えます。払戻率は約80%です。'],
  ['race','🛒 BOXとまとめ買い','「BOX/まとめ選択」をONにして3頭以上を選ぶと、組合せを自動で作ります。「カートに追加」で貯めて、「まとめて購入」で一度に買えます。1点の金額は、100から100万まで選べます。'],
  ['race','🐴 パドックと印','出走表の◎○▲△は、強さの予想順です。パドックでは、年齢、調子(⬆が好調)、近5走、勝率、芝・ダートの適性、疲労、騎手が分かります。ここを見て、買う馬を決めましょう。'],
  ['zukan','📖 馬図鑑','1000頭以上の馬がいます。名前で検索、クラスで絞り込み、ページ送りができます。価格は能力で決まり、「購入」で自分の馬にできます。ガチャで出た馬には、名前の横にランクが付きます。'],
- ['stable','🏠 馬房(育成・出走)','持っている馬を育てます。調教(300コイン)で、スピード・スタミナ・パワーが上がりますが、馬ごとの「能力上限」までです。出走登録(200コイン)で、好きなレースに出せます。3着以内に入ると、賞金が入ります。'],
+ ['stable','🏠 馬房(育成・出走)','持っている馬を育てます。調教(300コイン)で、スピード・スタミナ・パワーが上がりますが、馬ごとの「能力上限」までです。出走登録(200コイン)で、好きなレースに出せます。3着以内に入ると、賞金が入ります。馬が増えたら、「一括売却・引退」でまとめて整理できます。'],
  ['jockey','🏇 騎手','出走登録のときに、騎手を任意で頼めます。強い騎手ほど馬が強くなりますが、賞金から報酬(最大50%)が引かれます。同じ騎手は、同じレースで1頭にしか乗れません。'],
  ['stable','👴 引退と繁殖','馬は、出走40戦で自動引退します。手動でも引退できます。引退した2頭から、仔馬を作れます(繁殖)。世代を重ねて、強い血統を作りましょう。'],
- ['gacha','🎰 馬ガチャと10連','5000コインで馬を引けます。能力は低いですが、調教の伸びがとても大きい馬が出ます。ランクはN/R/SR/SSRと、ほぼ出ない幻のOGです。「10連」は9回分の料金で10回引け、R以上が1つ確定します。SR以上が出ると、虹色の豪華な演出になります。'],
+ ['gacha','🎰 馬ガチャと10連','5000コインで馬を引けます。能力は低いですが、調教の伸びがとても大きい馬が出ます。ランクはアイテムと同じN〜URの8段階と、ほぼ出ない幻のOGです。「10連」は9回分の料金で10回引け、R以上が1つ確定します。SR以上が出ると、虹色の豪華な演出になります。'],
  ['bag','🎒 アイテムとバッグ','アイテムは、バッグに入ります。にんじんなどを使うと、選んだ馬の能力・調教の上がり幅が、5分間、最大5倍まで上がります。「限界突破のオーブ」は、馬の能力上限を永久に引き上げます。出走登録の瞬間に効果が乗るので、登録の直前に使うのがコツです。'],
  ['gacha','🎁 アイテムガチャ','1000コインでアイテムを引けます。10連は9000コインです。ランクはN、R、RR、RRR、SR、SSR、HR、URの8段階で、上ほど効果が大きく、出にくくなります。限界突破のオーブは、このガチャだけで手に入ります。'],
- ['shop','🛒 ショップ','1時間ごとに、10個のアイテムが入れ替わります。値段は100コインからで、ランクが高いほど高くなります。'],
+ ['shop','🛒 ショップ','1時間ごとに、10個のアイテムが入れ替わります。値段は100コインからで、ランクが高いほど高くなります。5000コインで「リロール」すると、全員のショップがその場で入れ替わります。'],
  ['gacha','🎟 ガチャチケット','ログインボーナスで、ノーマルのチケットが5%の確率でもらえます。「○○以上確定」のスペシャルチケットは、コードでだけ手に入ります。'],
  ['award','🏅 称号と実績','条件を満たすと、称号と実績が自動で手に入ります。称号は名前の横に表示され、実績は報酬(1000コイン)がもらえます。管理者から贈られる特別な称号は、虹色に光ります。'],
  ['rank','🏆 ランキング','所持コイン、的中率、回収率のランキングがあります。的中率と回収率は、結果が出た馬券が10点以上の人だけが対象です。'],
@@ -415,20 +421,18 @@ function oddsOf(r,typ,pk){
 /* ---------- レース画面 ---------- */
 function race(){
  const now=Date.now(),O=openList(),dn=D.races.filter(r=>r.status=='done');
- D.last=running();
- const last=D.last?dn[1]:dn[0];
+ const rn=running();
+ const last=rn?dn[1]:dn[0];
  let cur=O.find(r=>r.id==st.rid);
  if(!cur){cur=O.find(r=>new Date(r.start_at)-now>15e3)||O[0];if(cur)pickRace(cur.id)}
  const HM={};D.horses.forEach(x=>{HM[x.id]=x});
  let h='';
+ if(rn)h+='<div class=card>🏁 レース中です。<button class=on onclick="setTab(\'watch\')">📺 観戦する</button></div>';
  if(O.length){
   h+='<div class=card><h3>🗓 レーススケジュール <small>表(芝)と裏(ダート)が交互に90秒ごと'+(O[0].dow!=null?' / 開催日: '+DOW[O[0].dow]+'曜':'')+'</small></h3>'
    +'<div class=sc><table><tr><th>R<th>発走<th>レース<th>頭数<th>状態<th></tr>'
    +O.slice(0,12).map(r=>'<tr class="'+(cur&&r.id==cur.id?'sel':'')+'"><td>'+rlabel(r)+'<td>'+tm(r.start_at)+'<td>'+esc(r.name)+'<td>'+r.entries.length+'<td>'+phase(r)
     +'<td><button onclick="pickRace('+r.id+');render()">見る</button></tr>').join('')+'</table></div></div>';
- }
- if(D.last){
-  h+='<div class=card><h3>🏁 レース中:'+rlabel(D.last)+' '+esc(D.last.name)+'</h3><canvas id=cv></canvas><div class=cm id=cm></div><p>払戻しの発表をお待ちください…</p></div>';
  }
  if(cur){
   const left=(new Date(cur.start_at)-now)/1000;
@@ -480,6 +484,26 @@ function race(){
  }
  return h;
 }
+
+/* ---------- レース観戦タブ ---------- */
+function watch(){
+ const O=openList(),now=Date.now(),rn=running(),dn=D.races.filter(r=>r.status=='done');
+ let h='<div class=card><h3>📺 レース観戦</h3>';
+ if(rn){
+  h+='<div>🏁 '+rlabel(rn)+' '+esc(rn.name)+'</div><canvas id=cv></canvas><div class=cm id=cm></div><p><small>払戻しは、映像が終わってから反映されます。</small></p>';
+ }else{
+  const nx=O.find(r=>new Date(r.start_at)>now);
+  h+='<div style="padding:30px 0;text-align:center"><div style="font-size:40px">🏇</div>';
+  if(nx)h+='<p>次のレース: <b>'+rlabel(nx)+' '+esc(nx.name)+'</b></p><p>発走まで <b id=wcd class=c style="font-size:28px"></b></p>';
+  else h+='<p>次のレースを準備中です…</p>';
+  h+='</div>';
+  const last=dn[0];
+  if(last)h+='<h4>直近の結果:'+rlabel(last)+' '+esc(last.name)+'</h4><table>'
+   +last.result.slice(0,5).map((g,i)=>{const e=last.entries.find(x=>x.gate==g);return '<tr><td>'+(i+1)+'着<td><span class=n>'+g+'</span> '+esc(e?e.name:'')+'<td>'+esc(e?jn(e.jockey_id):'')+'</tr>'}).join('')+'</table>';
+ }
+ return h+'</div>';
+}
+
 function setType(t){sel.type=t;sel.picks=[];render()}
 function pick(g){
  const i=sel.picks.indexOf(g),k=K[sel.type];
@@ -559,13 +583,55 @@ function zukan(){
    x.owner==me.id?'⭐所有':x.owner?'他人':locked.has(x.id)?'出走予定':'<button onclick="buyH('+x.id+')">購入</button>')).join(''):'<tr><td colspan=15>該当する馬がいません</tr>')
   +'</table></div>'+pager+'</div>';
 }
+
+/* 一括売却・引退 */
+function bkCands(){
+ const lim=RKI[BK.max];
+ const O=openList();
+ const entered=new Set(O.flatMap(r=>r.entries.map(e=>e.horse_id)));
+ return D.horses.filter(h=>h.owner==me.id&&!h.sure&&!entered.has(h.id)&&(BK.mode=='sell'||!h.retired)
+  &&(h.grk?RKI[h.grk]<=lim:BK.max=='UR'));
+}
+function bulk(){
+ const L=bkCands();
+ if(!BK.sel)BK.sel=null;
+ const chosen=L.filter(h=>!BK.ex.has(h.id));
+ const gain=chosen.reduce((a,h)=>a+Math.floor(h.price*0.6),0);
+ let h='<div class=card><h3>🧹 一括売却・一括引退</h3>'
+  +'<div><button class="'+(BK.mode=='sell'?'on':'')+'" onclick="BK.mode=\'sell\';BK.ex=new Set();render()">売却</button>'
+  +'<button class="'+(BK.mode=='retire'?'on':'')+'" onclick="BK.mode=\'retire\';BK.ex=new Set();render()">引退</button></div>'
+  +'<div>対象のランク(これ以下): <select onchange="BK.max=this.value;BK.ex=new Set();render()">'
+  +['N','R','RR','RRR','SR','SSR','HR','UR'].map(r=>'<option'+(BK.max==r?' selected':'')+'>'+r+'</option>').join('')+'</select></div>'
+  +'<p><small>ガチャで出た馬は、そのランクで判定します。ランクのない馬(購入した馬や仔馬など)は、「UR」を選んだときだけ対象になります。出走登録中の馬と、必勝馬は、対象外です。</small></p>'
+  +'<p>候補 '+L.length+'頭 / 実行する '+chosen.length+'頭'+(BK.mode=='sell'?' / 売却額の合計 <b class=c>🪙'+y(gain)+'</b>':'')+'</p>';
+ if(L.length){
+  h+='<div class=sc><table><tr><th>実行<th>馬名<th>ランク<th>クラス<th>価格</tr>'
+   +L.map(x=>'<tr><td><input type=checkbox '+(BK.ex.has(x.id)?'':'checked')+' onchange="bkTog('+x.id+')"><td>'+esc(x.name)+'<td>'+(x.grk?rkt(x.grk):'—')+'<td>'+(x.cls||'—')+'<td>'+y(x.price)+'</tr>').join('')+'</table></div>'
+   +'<p><small>チェックを外した馬は、除外されます。</small></p>'
+   +(chosen.length?'<button class=s onclick="doBulk()">'+(BK.mode=='sell'?'🗑 '+chosen.length+'頭を売却する':'🛌 '+chosen.length+'頭を引退させる')+'</button>':'');
+ }else h+='<p>対象の馬がいません。</p>';
+ return h+'</div>';
+}
+function bkTog(id){if(BK.ex.has(id))BK.ex.delete(id);else BK.ex.add(id);render()}
+async function doBulk(){
+ const ids=bkCands().filter(h=>!BK.ex.has(h.id)).map(h=>h.id);
+ if(!ids.length)return;
+ if(!confirm(ids.length+'頭を'+(BK.mode=='sell'?'売却':'引退')+'します。元に戻せません。よろしいですか?'))return;
+ const {data,error}=await sb.rpc('bulk_horses',{p_mode:BK.mode,p_ids:ids});
+ if(error){alert(error.message);return}
+ alert('完了: '+data);
+ BK.ex=new Set();
+ load();
+}
+
 function stable(){
  const m=D.horses.filter(h=>h.owner==me.id);
  if(!m.length)return '<p>所有馬がいません。図鑑から購入するか、ガチャを引きましょう。</p>';
  const O=openList(),now=Date.now();
  const el=O.filter(r=>new Date(r.start_at)-now>180e3&&r.entries.length<12);
  const entered=x=>{for(const r of O){if(r.entries.some(e=>e.horse_id==x.id))return r}return null};
- let h=m.map(x=>{
+ let h='<div class=card><button class="'+(BK.open?'on':'')+'" onclick="BK.open=!BK.open;render()">🧹 一括売却・引退 '+(BK.open?'▲':'▼')+'</button></div>'+(BK.open?bulk():'');
+ h+=m.map(x=>{
   const nameBtn=x.named?'':'<button onclick="nameIt('+x.id+')">✏️名前をつける</button>';
   const bf=IT.buffs.filter(b=>b.horse_id==x.id&&new Date(b.until)>now);
   const bfh=bf.length?'<div>🧪 効果中: '+bf.map(b=>esc(b.name)+' ×'+b.mult+'(残り'+Math.max(0,Math.round((new Date(b.until)-now)/1000))+'秒)').join(' / ')+'</div>':'';
@@ -650,9 +716,9 @@ function bag(){
   +mine.map(x=>'<option value="'+x.id+'"'+(String(st.bh)==String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div>';
  h+='<p><small>ステータスアップの効果は5分間です。出走登録の瞬間に能力へ反映されるので、登録の直前に使いましょう。調教の上がり幅は、調教した瞬間に反映されます。重ねがけは、合計で最大5倍までです。「限界突破のオーブ」は、効果が永久に続きます。</small></p>';
  h+='<h4>アイテム</h4>'+(stat.length?'<div class=sc><table><tr><th>ランク<th>アイテム<th>効果<th>個数<th></tr>'
-  +stat.map(x=>{const i=IM[x.item_id];return '<tr><td>'+rkt(i.rk)+'<td>'+i.icon+' '+esc(i.name)+'<td>'+esc(i.descr)+'<td>'+x.qty
+  +stat.map(x=>{const i=IM[x.item_id];return '<tr><td>'+rkt(i.rk)+'<td>'+i.icon+' '+esc(i.name)+'<td>'+esc(i.descr)+'<td>'+y(x.qty)
    +'<td><button onclick="useItem('+i.id+')">使う</button></tr>'}).join('')+'</table></div>':'<p>アイテムはありません。ガチャやショップで手に入ります。</p>');
- h+='<h4>チケット</h4>'+(tk.length?tk.map(x=>{const i=IM[x.item_id];return '<div>'+i.icon+' '+esc(i.name)+' ×'+x.qty+' <small>'+esc(i.descr)+'</small></div>'}).join('')+'<p><small>チケットは「🎰ガチャ」タブで使えます。</small></p>':'<p>チケットはありません。ノーマルはログインボーナス(各5%)、スペシャルはコードで手に入ります。</p>');
+ h+='<h4>チケット</h4>'+(tk.length?tk.map(x=>{const i=IM[x.item_id];return '<div>'+i.icon+' '+esc(i.name)+' ×'+y(x.qty)+' <small>'+esc(i.descr)+'</small></div>'}).join('')+'<p><small>チケットは「🎰ガチャ」タブで使えます。</small></p>':'<p>チケットはありません。ノーマルはログインボーナス(各5%)、スペシャルはコードで手に入ります。</p>');
  const bf=IT.buffs.filter(b=>new Date(b.until)>now);
  h+='<h4>🧪 効果中</h4>'+(bf.length?bf.map(b=>{const hh=D.horses.find(q=>q.id==b.horse_id);return '<div>'+esc(hh?hh.name:'?')+': '+esc(b.name)+' ×'+b.mult+'(残り'+Math.max(0,Math.round((new Date(b.until)-now)/1000))+'秒)</div>'}).join(''):'<p>なし</p>');
  return h+'</div>';
@@ -669,6 +735,7 @@ function shop(){
  if(!IT.shop)return '<p>読み込み中…</p>';
  const L=IT.shop.list||[];
  return '<div class=card><h3>🛒 アイテムショップ</h3><p>1時間ごとに10個が入れ替わります。次の入れ替えまで <b id=shcd class=c></b></p>'
+  +'<p><button class=on onclick="reroll()">🔄 リロール(🪙5,000・全員のショップが入れ替わります)</button></p>'
   +'<div class=sc><table><tr><th>ランク<th>アイテム<th>効果<th>価格<th></tr>'
   +L.map(s=>'<tr><td>'+rkt(s.rk)+'<td>'+s.icon+' '+esc(s.name)+'<td>'+esc(s.descr)+'<td>🪙'+y(s.price)
    +'<td><button onclick="buyShop('+s.idx+')">購入</button></tr>').join('')+'</table></div></div>';
@@ -677,6 +744,13 @@ async function buyShop(idx){
  const {data,error}=await sb.rpc('shop_buy',{p_idx:idx});
  if(error)alert(error.message);else alert('購入しました: '+data);
  load();
+}
+async function reroll(){
+ if(!confirm('5000コインでショップをリロールします。全プレイヤーのショップが入れ替わります。よろしいですか?'))return;
+ const {error}=await sb.rpc('shop_reroll_do');
+ if(error){alert(error.message);return}
+ await loadShop();load();
+ toast('🔄 ショップをリロールしました');
 }
 
 /* ---------- 騎手一覧 ---------- */
@@ -807,11 +881,11 @@ function playGacha(res,after){
 function gacha(){
  const IM=IMAP();
  const tk=k=>IT.inv.filter(x=>x.qty>0&&IM[x.item_id]&&IM[x.item_id].kind==k).map(x=>{const i=IM[x.item_id];
-  return '<button onclick="'+(k=='tk_horse'?'pull':'pullItem')+'('+i.id+')">'+i.icon+' '+esc(i.name)+' ×'+x.qty+'</button>'}).join('');
+  return '<button onclick="'+(k=='tk_horse'?'pull':'pullItem')+'('+i.id+')">'+i.icon+' '+esc(i.name)+' ×'+y(x.qty)+'</button>'}).join('');
  const th=tk('tk_horse'),ti=tk('tk_item');
  return '<div class=card><h3>🎰 馬ガチャ</h3>'
  +'<p>排出馬は能力が低い代わりに、調教での伸びが大きい馬です。引いた馬には、名前の横にランクが付きます。</p>'
- +'<p>N 60% (伸び×3) / R 28% (×4) / <span class=rb>SR 10% (×5) / SSR 2% (×7)</span> / <b class=c>OG ほぼ0%</b></p>'
+ +'<p><small>N 40% (伸び×3) / R 28% (×4) / RR 16% (×5) / RRR 8% (×6) / <span class=rb>SR 4.5% (×7) / SSR 2.2% (×9) / HR 1% (×12) / UR 0.3% (×16)</span> / <b class=c>OG ほぼ0%</b></small></p>'
  +'<p><small>OG: 馬房に remon horse が追加され、称号「admin」が手に入ります。10連は、9回分の料金で10回引け、R以上が1つ確定します。</small></p>'
  +'<button onclick="pull()">🎰 1回(🪙5,000)</button><button class=on onclick="pull10()">🎰 10連(🪙45,000・R以上確定)</button>'
  +(th?'<div>チケットで引く: '+th+'</div>':'')+'</div>'
@@ -1136,10 +1210,14 @@ setInterval(()=>{
   const s=Math.max(0,Math.floor((new Date(o.start_at)-Date.now())/1000));
   c.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
  }
+ const w=$('#wcd'),nx=openList().find(r=>new Date(r.start_at)>Date.now());
+ if(w&&nx){
+  const s=Math.max(0,Math.floor((new Date(nx.start_at)-Date.now())/1000));
+  w.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+ }
  const e=$('#shcd');
  if(e){const s=3600-Math.floor(Date.now()/1000)%3600;e.textContent=Math.floor(s/60)+'分'+String(s%60).padStart(2,'0')+'秒'}
 },500);
-/* 映像の枠の有無を、画面の状態と合わせる(再読み込み不要にする) */
 let vidId=0;
 setInterval(()=>{
  if(!me||!D.p||GB)return;
@@ -1150,9 +1228,8 @@ setInterval(()=>{
   if(D.bets.some(b=>b.race_id==id&&Number(b.payout)>0))SFX.win();
   render();return;
  }
- if(st.tab=='race'&&!!r!==!!$('#cv'))render();
+ if((st.tab=='race'||st.tab=='watch')&&st.tab=='watch'&&!!r!==!!$('#cv'))render();
 },700);
-/* 発走時刻を過ぎたレースがあれば、すぐに結果決定を依頼する */
 let TICKING=false;
 setInterval(async()=>{
  if(!me||GB||TICKING)return;
@@ -1165,7 +1242,7 @@ setInterval(async()=>{
 },1500);
 setInterval(()=>{
  const tg=document.activeElement.tagName;
- if(me&&!GB&&(st.tab=='race'||(tg!='INPUT'&&tg!='SELECT')))load();
+ if(me&&!GB&&(st.tab=='race'||st.tab=='watch'||(tg!='INPUT'&&tg!='SELECT')))load();
  if(me&&st.tab=='shop'&&IT.shop&&Math.floor(Date.now()/3.6e6)!=IT.shop.hr)loadShop();
 },4000);
 setInterval(()=>{if(me&&st.tab=='chat')loadChat()},3000);
