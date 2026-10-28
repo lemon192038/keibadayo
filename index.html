@@ -20,6 +20,25 @@ select{max-width:92%}
 #tsk{position:fixed;top:6px;right:6px;z-index:100;background:#a33;margin:0}
 #tp{position:fixed;left:0;right:0;bottom:0;background:#000e;border-top:2px solid #d4a017;padding:10px 14px;z-index:99;line-height:1.55}
 .tag{display:inline-block;border-radius:6px;padding:1px 6px;background:#345;font-size:12px}
+/* 虹色(管理者系の称号・SR以上) */
+.rb{font-weight:700;background:linear-gradient(90deg,#f33,#fa0,#ee0,#3d3,#0cf,#55f,#c4f,#f33);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:rbt 2.2s linear infinite;filter:drop-shadow(0 0 3px #fff9)}
+@keyframes rbt{0%{background-position:0 0}100%{background-position:300% 0}}
+/* ガチャ演出 */
+#gc{position:fixed;inset:0;z-index:300;background:#000e;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:auto;padding:10px;box-sizing:border-box;color:#fff}
+#gc.rbbg{background:linear-gradient(120deg,#f00,#fa0,#ff0,#0f0,#0ff,#00f,#f0f,#f00);background-size:500% 500%;animation:rbg 2.2s linear infinite}
+@keyframes rbg{0%{background-position:0 50%}100%{background-position:500% 50%}}
+#gcm{font-size:22px;font-weight:700;margin:8px;text-align:center;min-height:30px}
+.orb{width:120px;height:120px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,var(--c,#9aa));box-shadow:0 0 30px var(--c,#9aa);animation:shk .25s infinite}
+.orb.rbo{background:linear-gradient(135deg,#f00,#fa0,#ff0,#0f0,#0ff,#00f,#f0f,#f00);background-size:400% 400%;box-shadow:0 0 50px #fff;animation:shk .2s infinite,rbg 1s linear infinite}
+.orb.crack{box-shadow:0 0 40px #fff;animation:shk .08s infinite}
+@keyframes shk{0%{transform:translate(-4px,0) rotate(-3deg)}50%{transform:translate(4px,0) rotate(3deg)}100%{transform:translate(-4px,0) rotate(-3deg)}}
+.flash{position:fixed;inset:0;background:#fff;pointer-events:none;z-index:310;animation:fl .7s forwards}
+@keyframes fl{0%{opacity:1}100%{opacity:0}}
+.gcard{width:104px;padding:8px 4px;margin:4px;border-radius:10px;background:#123;text-align:center;font-size:12px;animation:pop .4s both;word-break:break-all}
+.gcard.hi{background:linear-gradient(135deg,#f33,#fa0,#ee0,#3d3,#0cf,#55f,#c4f);background-size:300% 300%;color:#000;box-shadow:0 0 14px #fff;animation:pop .4s both,rbg 1.5s linear infinite}
+@keyframes pop{0%{transform:scale(0) rotate(-20deg);opacity:0}100%{transform:scale(1);opacity:1}}
+.pt{position:fixed;top:-10px;width:8px;height:8px;border-radius:50%;pointer-events:none;z-index:305;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(105vh) rotate(720deg)}}
 </style></head><body><div id="app"></div><div id="tut"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
@@ -44,6 +63,13 @@ const fmt=s=>new Date(s).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'nu
 const tm=s=>new Date(s).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',second:'2-digit'});
 const pct=(a,b)=>b?(Math.round(a/b*1000)/10)+'%':'-';
 
+/* 管理者系の称号は虹色 */
+const ADM=new Set(['ADMIN','admin','βテスター','競馬狂','バニーガール','影の実力者','ヘロヴライン','地獄の使者','初代ICの英雄','淫夢の王','旭日章']);
+const tn=n=>n?'<span class="'+(ADM.has(n)?'rb':'c')+'">'+esc(n)+'</span>':'';
+const RKI={N:0,R:1,RR:2,RRR:3,SR:4,SSR:5,HR:6,UR:7,OG:8};
+const RKC={N:'#9aa',R:'#4af',RR:'#4d8',RRR:'#c6f',SR:'#fc3',SSR:'#f6c',HR:'#f84',UR:'#fff',OG:'#fff'};
+const PC=['#f33','#fa0','#ee0','#3d3','#0cf','#55f','#c4f','#fff'];
+
 let me=null,bonusDone=false,lastAw=0,SND=true;
 let D={p:null,races:[],horses:[],bets:[],jk:[],last:null};
 let st={tab:'race',rk:'coins',ba:'',bb:'',jk:{},er:{},rid:0,bh:''};
@@ -56,6 +82,7 @@ let DM={list:[],to:'',open:false,draft:'',pl:[],pn:[],lastUn:-1,plAt:0};
 let IT={items:[],inv:[],buffs:[],shop:null};
 let AW={defs:[],t:new Set(),a:new Set(),at:0,kind:'title',f:'all',page:0,q:'',draft:''};
 let TUT={on:false,step:0,shown:false};
+let IC={};
 const jn=id=>{const j=(D.jk||[]).find(x=>x.id==id);return j?j.name:'—'};
 const openList=()=>D.races.filter(r=>r.status=='open').sort((a,b)=>a.id-b.id);
 const rlabel=r=>r.rno?((r.side?'裏':'表')+r.rno+'R'):'特別';
@@ -72,6 +99,53 @@ async function allRows(mk){
   p++;
  }
  return out;
+}
+
+/* ---------- アイコン ---------- */
+function ico(uid,s){
+ s=s||24;
+ if(IC[uid])return '<img src="'+IC[uid]+'" style="width:'+s+'px;height:'+s+'px;border-radius:50%;object-fit:cover;vertical-align:middle">';
+ return '<span style="display:inline-block;width:'+s+'px;height:'+s+'px;line-height:'+s+'px;border-radius:50%;background:#345;vertical-align:middle;text-align:center;font-size:'+Math.round(s*.6)+'px">🐴</span>';
+}
+async function fetchIcons(ids){
+ const miss=[...new Set(ids)].filter(i=>i&&!(i in IC));
+ if(!miss.length)return false;
+ const {data}=await sb.rpc('get_icons',{ids:miss.slice(0,100)});
+ miss.slice(0,100).forEach(i=>{IC[i]=(data&&data[i])||null});
+ return true;
+}
+function profile(){
+ return '<div class=card><h3>👤 プロフィール</h3>'
+  +'<div style="margin:8px 0">'+ico(me.id,96)+'</div>'
+  +'<p><b>'+(D.p.title_name?tn(D.p.title_name)+' ':'')+esc(D.p.name)+'</b></p>'
+  +'<p><small>アイコンは、端末の写真から選べます。正方形に切り取られ、小さく縮小されて保存されます。チャットやDMに表示されます。</small></p>'
+  +'<input type=file id=icf accept="image/*" style="display:none" onchange="uploadIcon(this)">'
+  +'<button onclick="document.getElementById(\'icf\').click()">📷 写真から選ぶ</button>'
+  +'<button class=s onclick="clearIcon()">アイコンを削除</button></div>';
+}
+function uploadIcon(inp){
+ const f=inp.files&&inp.files[0];
+ if(!f)return;
+ if(!/^image\//.test(f.type)){alert('画像を選んでください');inp.value='';return}
+ const u=URL.createObjectURL(f),img=new Image();
+ img.onload=async()=>{
+  const c=document.createElement('canvas');c.width=c.height=96;
+  const g=c.getContext('2d'),s=Math.min(img.width,img.height);
+  g.fillStyle='#fff';g.fillRect(0,0,96,96);
+  g.drawImage(img,(img.width-s)/2,(img.height-s)/2,s,s,0,0,96,96);
+  URL.revokeObjectURL(u);
+  const d=c.toDataURL('image/jpeg',.7);
+  const {error}=await sb.rpc('set_icon',{p:d});
+  if(error){alert(error.message);return}
+  IC[me.id]=d;D.p.icon=d;render();alert('アイコンを変更しました');
+ };
+ img.onerror=()=>{URL.revokeObjectURL(u);alert('この画像は読み込めませんでした')};
+ img.src=u;inp.value='';
+}
+async function clearIcon(){
+ const {error}=await sb.rpc('set_icon',{p:''});
+ if(error){alert(error.message);return}
+ IC[me.id]=null;D.p.icon=null;render();
 }
 
 /* ---------- 効果音(WebAudio) ---------- */
@@ -106,7 +180,8 @@ const SFX={
  stretch(){[392,494,587].forEach((f,i)=>beep(f,.15,'sawtooth',.05,i*.1));noise(1.2,.05)},
  goal(){[784,988,1175,1568].forEach((f,i)=>beep(f,.25,'triangle',.08,i*.12));noise(1.5,.06)},
  win(){[1047,1319,1568,2093].forEach((f,i)=>beep(f,.2,'square',.05,i*.09))},
- dm(){beep(880,.12,'sine',.07);beep(1175,.15,'sine',.07,.12)}
+ dm(){beep(880,.12,'sine',.07);beep(1175,.15,'sine',.07,.12)},
+ rise(){[262,330,392,523,659,784,1047].forEach((f,i)=>beep(f,.16,'triangle',.06,i*.09))}
 };
 
 /* ---------- ログイン ---------- */
@@ -123,7 +198,7 @@ async function auth(su){
 sb.auth.onAuthStateChange((_,s)=>{
  me=s?s.user:null;
  if(me){setTimeout(load,0)}
- else{bonusDone=false;DM.list=[];DM.lastUn=-1;DM.open=false;TUT.on=false;TUT.shown=false;showTut();login()}
+ else{bonusDone=false;DM.list=[];DM.lastUn=-1;DM.open=false;IC={};TUT.on=false;TUT.shown=false;showTut();login()}
 });
 
 /* ---------- データ読み込み ---------- */
@@ -155,6 +230,7 @@ async function load(){
   if(ids.length){const eh=await sb.from('horses').select('*').in('id',ids);hs=hs.concat(eh.data||[])}
  }
  D={p:p.data,races:races,horses:hs,bets:b.data||[],jk:j.data||[],last:null};
+ if(D.p)IC[me.id]=D.p.icon||null;
  render();
  if(D.p&&D.p.tut_done===false&&!TUT.shown){TUT.shown=true;startTut()}
  const nw=Date.now();
@@ -248,10 +324,10 @@ function shown(){
 function dmUnread(){return DM.list.filter(m=>m.to_id==me.id&&!m.read).length}
 function render(){
  if(!me||!D.p)return;
- const T={race,zukan,stable,bag,shop,jockey,bets,prize,award,rank,code,gacha,chat,dm};
+ const T={race,zukan,stable,bag,shop,jockey,bets,prize,award,rank,code,gacha,chat,dm,profile};
  const un=dmUnread();
- const tabs=[['race','レース'],['zukan','馬図鑑・購入'],['stable','馬房'],['bag','🎒バッグ'],['shop','🛒ショップ'],['jockey','🏇騎手'],['bets','馬券履歴'],['prize','賞金履歴'],['award','🏅称号・実績'],['rank','ランキング'],['code','🎟コード'],['gacha','🎰ガチャ'],['chat','💬チャット'],['dm','✉️DM'+(un?'('+un+')':'')]];
- $('#app').innerHTML='<header><b>🏇 GWCG</b><span>'+(D.p.title_name?'<span class=c>'+esc(D.p.title_name)+'</span> ':'')+esc(D.p.name)+'</span><span class=c>🪙'+y(shown())+'</span>'
+ const tabs=[['race','レース'],['zukan','馬図鑑・購入'],['stable','馬房'],['bag','🎒バッグ'],['shop','🛒ショップ'],['jockey','🏇騎手'],['bets','馬券履歴'],['prize','賞金履歴'],['award','🏅称号・実績'],['rank','ランキング'],['code','🎟コード'],['gacha','🎰ガチャ'],['chat','💬チャット'],['dm','✉️DM'+(un?'('+un+')':'')],['profile','👤プロフィール']];
+ $('#app').innerHTML='<header><span onclick="setTab(\'profile\')" style="cursor:pointer">'+ico(me.id,34)+'</span><b>🏇 GWCG</b><span>'+(D.p.title_name?tn(D.p.title_name)+' ':'')+esc(D.p.name)+'</span><span class=c>🪙'+y(shown())+'</span>'
  +'<button onclick="startTut()">❓</button>'
  +'<button onclick="SND=!SND;if(SND)ac();render()">'+(SND?'🔊':'🔇')+'</button>'
  +'<button onclick="sb.auth.signOut()">ログアウト</button></header>'
@@ -270,14 +346,15 @@ const TS=[
  ['stable','🏠 馬房(育成・出走)','持っている馬を育てます。調教(300コイン)で、スピード・スタミナ・パワーが上がります。疲労が溜まると、休ませる必要があります。出走登録(200コイン)で、好きなレースに出せます。3着以内に入ると、賞金が入ります。'],
  ['jockey','🏇 騎手','出走登録のときに、騎手を任意で頼めます。強い騎手ほど馬が強くなりますが、賞金から報酬(最大50%)が引かれます。同じ騎手は、同じレースで1頭にしか乗れません。'],
  ['stable','👴 引退と繁殖','馬は、出走40戦で自動引退します。手動でも引退できます。引退した2頭から、仔馬を作れます(繁殖)。世代を重ねて、強い血統を作りましょう。'],
- ['gacha','🎰 馬ガチャ','5000コインで馬を引けます。能力は低いですが、調教の伸びがとても大きい馬が出ます。ランクはN/R/SR/SSRと、ほぼ出ない幻のOGです。引いた馬には、自分で名前をつけられます。'],
+ ['gacha','🎰 馬ガチャと10連','5000コインで馬を引けます。能力は低いですが、調教の伸びがとても大きい馬が出ます。ランクはN/R/SR/SSRと、ほぼ出ない幻のOGです。「10連」は9回分の料金で10回引け、R以上が1つ確定します。SR以上が出ると、虹色の豪華な演出になります。'],
  ['bag','🎒 アイテムとバッグ','アイテムは、バッグに入ります。にんじんなどを使うと、選んだ馬のスピード・スタミナ・パワー・調教の上がり幅が、5分間、最大5倍まで上がります。出走登録の瞬間に効果が乗るので、登録の直前に使うのがコツです。'],
- ['gacha','🎁 アイテムガチャ','1000コインでアイテムを引けます。ランクはN、R、RR、RRR、SR、SSR、HR、URの8段階で、上ほど効果が大きく、出にくくなります。'],
+ ['gacha','🎁 アイテムガチャ','1000コインでアイテムを引けます。10連は9000コインです。ランクはN、R、RR、RRR、SR、SSR、HR、URの8段階で、上ほど効果が大きく、出にくくなります。'],
  ['shop','🛒 ショップ','1時間ごとに、10個のアイテムが入れ替わります。値段は100コインからで、ランクが高いほど高くなります。'],
  ['gacha','🎟 ガチャチケット','ログインボーナスで、各種のチケットが5%の確率でもらえます。ノーマルなら1回無料、「○○以上確定」のスペシャルチケットは、そのランク以上が必ず出ます。コードでも手に入ります。'],
- ['award','🏅 称号と実績','条件を満たすと、称号と実績が自動で手に入ります。称号は名前の横に表示され、実績は報酬(1000コイン)がもらえます。数がとても多いので、検索で探せます。'],
+ ['award','🏅 称号と実績','条件を満たすと、称号と実績が自動で手に入ります。称号は名前の横に表示され、実績は報酬(1000コイン)がもらえます。管理者から贈られる特別な称号は、虹色に光ります。'],
  ['rank','🏆 ランキング','所持コイン、的中率、回収率のランキングがあります。的中率と回収率は、結果が出た馬券が10点以上の人だけが対象です。'],
  ['code','🎟 コードとログインボーナス','配布されたコードを入力すると、コインや馬がもらえます。ログインボーナスは、毎日0時(日本時間)に更新され、1日1回、1000コインがもらえます。'],
+ ['profile','👤 プロフィールとアイコン','写真からアイコンを選べます。アイコンは、チャットやDMに表示されます。'],
  ['chat','💬 チャットとDM','チャットは全員に見え、DMは相手だけに見えます。迷惑な人がいたら、管理者に伝えてください。'],
  ['race','✅ チュートリアル完了','以上です。まずは、少額で馬券を買ってみましょう。馬を育てて、ガチャも引いて、G1を目指してください!']
 ];
@@ -639,7 +716,7 @@ function award(){
   +'<input id=awq maxlength=20 placeholder="名前・条件で検索" value="'+esc(AW.draft)+'" style="width:50%" oninput="AW.draft=this.value" onkeydown="if(event.key==\'Enter\'){AW.q=AW.draft.trim();AW.page=0;render()}"><button onclick="AW.q=AW.draft.trim();AW.page=0;render()">🔍</button>'
   +(isT?'<button onclick="act(\'set_title\',{c:\'\'})">称号を外す</button>':'')
   +pager+'<div class=sc><table><tr><th>'+(isT?'称号':'実績')+'<th>獲得条件<th>状態'+(isT?'<th>':'')+'</tr>'
-  +rows.map(d=>{const ok=have.has(d.code);return '<tr><td>'+esc(d.name)+'<td>'+esc(d.how)+'<td>'+(ok?'✅':'🔒')
+  +rows.map(d=>{const ok=have.has(d.code);return '<tr><td>'+(isT&&ADM.has(d.name)?'<span class=rb>'+esc(d.name)+'</span>':esc(d.name))+'<td>'+esc(d.how)+'<td>'+(ok?'✅':'🔒')
    +(isT?'<td>'+(ok?(D.p.title==d.code?'<span class=c>表示中</span>':'<button onclick="act(\'set_title\',{c:\''+esc(d.code)+'\'})">表示する</button>'):''):'')+'</tr>'}).join('')
   +'</table></div>'+pager+'</div>';
 }
@@ -653,7 +730,7 @@ function rank(){
  const L=[...(RK.d[st.rk]||[])].sort((a,b)=>Number(b[key])-Number(a[key]));
  if(st.rk!='coins')h+='<p>結果が出た馬券が10点以上あるプレイヤーが対象です。</p>';
  h+='<table><tr><th>順位<th>名前<th>'+(st.rk=='coins'?'所持コイン':st.rk=='hit'?'的中率(点数)':'回収率(点数)')+'</tr>'
-  +L.map((x,i)=>'<tr'+(x.name==D.p.name?' class=sel':'')+'><td>'+(i+1)+'<td>'+(x.title?esc(x.title)+' ':'')+esc(x.name)
+  +L.map((x,i)=>'<tr'+(x.name==D.p.name?' class=sel':'')+'><td>'+(i+1)+'<td>'+(x.title?tn(x.title)+' ':'')+esc(x.name)
    +'<td>'+(st.rk=='coins'?'🪙'+y(x.coins):x.rate+'%('+x.n+')')+'</tr>').join('')+'</table></div>';
  return h;
 }
@@ -670,22 +747,67 @@ async function redeem(){
  load();
 }
 
+/* ---------- ガチャ演出 ---------- */
+function playGacha(res,after){
+ const best=res.reduce((a,b)=>RKI[b.rk]>RKI[a.rk]?b:a);
+ const hi=RKI[best.rk]>=4,rev=hi&&Math.random()<.4,top=RKI[best.rk]>=5;
+ const ov=document.createElement('div');ov.id='gc';
+ ov.innerHTML='<div id=gcm>…</div><div id=gco class=orb></div><div id=gcc></div><div style="font-size:12px;margin-top:8px;opacity:.7" id=gcs>タップでスキップ</div>';
+ document.body.appendChild(ov);
+ const orb=ov.querySelector('#gco'),msg=ov.querySelector('#gcm'),cards=ov.querySelector('#gcc'),sk=ov.querySelector('#gcs');
+ const T=[],later=(ms,f)=>T.push(setTimeout(f,ms));
+ let fin=false;
+ orb.style.setProperty('--c',rev?RKC.N:(hi?'#fc3':RKC[best.rk]));
+ const flash=()=>{const f=document.createElement('div');f.className='flash';ov.appendChild(f);setTimeout(()=>f.remove(),800)};
+ const sparks=n=>{for(let k=0;k<n;k++){const d=document.createElement('i');d.className='pt';
+  d.style.left=Math.random()*100+'%';d.style.background=PC[k%PC.length];
+  d.style.animationDuration=(1.6+Math.random()*2.4)+'s';d.style.animationDelay=(Math.random()*1.2)+'s';
+  ov.appendChild(d);setTimeout(()=>d.remove(),5500)}};
+ function reveal(){
+  if(fin)return;fin=true;T.forEach(clearTimeout);orb.remove();sk.remove();
+  if(hi){
+   ov.classList.add('rbbg');flash();sparks(top?70:35);SFX.goal();
+   msg.innerHTML='<span class=rb style="font-size:30px">🌈 '+esc(best.rk)+' 獲得!! 🌈</span>';
+  }else{
+   SFX.win();msg.textContent=best.rk+' 獲得';
+  }
+  cards.style.cssText='display:flex;flex-wrap:wrap;justify-content:center;max-width:580px';
+  cards.innerHTML=res.map((r,i)=>'<div class="gcard'+(RKI[r.rk]>=4?' hi':'')+'" style="animation-delay:'+(i*.12)+'s"><div><b>'+esc(r.rk)+'</b></div><div>'+esc(r.label)+'</div></div>').join('');
+  const b=document.createElement('button');b.textContent='閉じる';b.className='on';
+  b.onclick=e=>{e.stopPropagation();ov.remove();if(after)after()};
+  cards.after(b);
+ }
+ ov.onclick=()=>{if(!fin)reveal()};
+ later(0,()=>SFX.gate());
+ later(700,()=>{msg.textContent='…！';SFX.rise()});
+ if(rev){
+  later(1900,()=>{msg.textContent='…！？';orb.classList.add('crack');flash()});
+  later(2900,()=>{orb.classList.add('rbo');msg.innerHTML='<span class=rb style="font-size:34px">逆転!!</span>';ov.classList.add('rbbg');flash();SFX.stretch()});
+  later(4500,reveal);
+ }else if(hi){
+  later(1700,()=>{orb.classList.add('rbo');msg.innerHTML='<span class=rb style="font-size:30px">！！！</span>';ov.classList.add('rbbg');flash();SFX.stretch()});
+  later(3400,reveal);
+ }else{
+  later(2000,reveal);
+ }
+}
+
 /* ---------- ガチャ(馬・アイテム) ---------- */
 function gacha(){
  const IM=IMAP();
  const tk=k=>IT.inv.filter(x=>x.qty>0&&IM[x.item_id]&&IM[x.item_id].kind==k).map(x=>{const i=IM[x.item_id];
   return '<button onclick="'+(k=='tk_horse'?'pull':'pullItem')+'('+i.id+')">'+i.icon+' '+esc(i.name)+' ×'+x.qty+'</button>'}).join('');
  const th=tk('tk_horse'),ti=tk('tk_item');
- return '<div class=card><h3>🎰 馬ガチャ(1回 🪙5000)</h3>'
+ return '<div class=card><h3>🎰 馬ガチャ</h3>'
  +'<p>排出馬は能力が低い代わりに、調教での伸びが大きい馬です。</p>'
- +'<p>N 60% (伸び×3) / R 28% (×4) / SR 10% (×5) / SSR 2% (×7) / <b class=c>OG ほぼ0%</b></p>'
- +'<p><small>OG: 馬房に remon horse が追加され、称号「admin」が手に入ります。</small></p>'
- +'<button onclick="pull()">🎰 ガチャを引く(5000)</button>'
+ +'<p>N 60% (伸び×3) / R 28% (×4) / <span class=rb>SR 10% (×5) / SSR 2% (×7)</span> / <b class=c>OG ほぼ0%</b></p>'
+ +'<p><small>OG: 馬房に remon horse が追加され、称号「admin」が手に入ります。10連は、9回分の料金で10回引け、R以上が1つ確定します。</small></p>'
+ +'<button onclick="pull()">🎰 1回(🪙5,000)</button><button class=on onclick="pull10()">🎰 10連(🪙45,000・R以上確定)</button>'
  +(th?'<div>チケットで引く: '+th+'</div>':'')+'</div>'
- +'<div class=card><h3>🎁 アイテムガチャ(1回 🪙1000)</h3>'
+ +'<div class=card><h3>🎁 アイテムガチャ</h3>'
  +'<p>ステータスアップのアイテムが出ます。ランクが高いほど、効果が大きく、出にくくなります。</p>'
- +'<p><small>N 40% / R 28% / RR 16% / RRR 8% / SR 4.5% / SSR 2.2% / HR 1% / UR 0.3%</small></p>'
- +'<button onclick="pullItem()">🎁 アイテムガチャを引く(1000)</button>'
+ +'<p><small>N 40% / R 28% / RR 16% / RRR 8% / <span class=rb>SR 4.5% / SSR 2.2% / HR 1% / UR 0.3%</span></small></p>'
+ +'<button onclick="pullItem()">🎁 1回(🪙1,000)</button><button class=on onclick="pullItem10()">🎁 10連(🪙9,000・R以上確定)</button>'
  +(ti?'<div>チケットで引く: '+ti+'</div>':'')+'</div>';
 }
 async function pull(tk){
@@ -694,23 +816,44 @@ async function pull(tk){
  if(error){alert(error.message);return}
  const parts=String(data).split(':');
  await load();
- if(parts[0]=='OG'){alert('🌌 OG!!! 奇跡が起きました!\n馬房に remon horse が追加され、称号「admin」を獲得しました!');return}
- offerName(parts[1],'🎉 '+parts[0]+' の馬が出ました!');
+ playGacha([{rk:parts[0],label:parts[0]=='OG'?'remon horse':'🐴 名無しの馬'}],()=>{
+  if(parts[0]=='OG')alert('🌌 OG!!! 奇跡が起きました!\n馬房に remon horse が追加され、称号「admin」を獲得しました!');
+  else offerName(parts[1],'🎉 '+parts[0]+' の馬が出ました!');
+ });
+}
+async function pull10(){
+ if(!confirm('45000コインで10連を引きますか?'))return;
+ const {data,error}=await sb.rpc('gacha10');
+ if(error){alert(error.message);return}
+ const res=String(data).split(',').map(s=>{const p=s.split(':');return {rk:p[0],label:p[0]=='OG'?'remon horse':'🐴 名無しの馬'}});
+ await load();
+ playGacha(res,()=>{
+  if(res.some(r=>r.rk=='OG'))alert('🌌 OG!!! 馬房に remon horse が追加され、称号「admin」を獲得しました!');
+  alert('名前のない馬は、「馬房」タブの「✏️名前をつける」から名前をつけられます。');
+ });
 }
 async function pullItem(tk){
  if(!tk&&!confirm('1000コインで引きますか?'))return;
  const {data,error}=await sb.rpc('item_gacha',{tk:tk||null});
  if(error){alert(error.message);return}
  const p=String(data).split('|');
- alert('🎁 ['+p[0]+'] '+p[2]+' が出ました!');
- load();
+ await load();
+ playGacha([{rk:p[0],label:p[2]}],()=>load());
+}
+async function pullItem10(){
+ if(!confirm('9000コインで10連を引きますか?'))return;
+ const {data,error}=await sb.rpc('item_gacha10');
+ if(error){alert(error.message);return}
+ const res=String(data).split(';').map(s=>{const p=s.split('|');return {rk:p[0],label:p[2]}});
+ await load();
+ playGacha(res,()=>load());
 }
 
 /* ---------- チャット ---------- */
 function chHtml(){
  if(!CH.list.length)return '<div><small>まだメッセージがありません。</small></div>';
- return CH.list.map(m=>'<div><small>'+fmt(m.at)+'</small> <b'+(m.user_id==me.id?' class=c':'')+'>'
-  +(m.title?esc(m.title)+' ':'')+esc(m.name)+'</b>: '+esc(m.msg)+'</div>').join('');
+ return CH.list.map(m=>'<div>'+ico(m.user_id,22)+' <small>'+fmt(m.at)+'</small> '+(m.title?tn(m.title)+' ':'')+'<b'+(m.user_id==me.id?' class=c':'')+'>'
+  +esc(m.name)+'</b>: '+esc(m.msg)+'</div>').join('');
 }
 function chat(){
  setTimeout(()=>{const el=$('#chlog');if(el)el.scrollTop=el.scrollHeight},0);
@@ -723,6 +866,7 @@ async function loadChat(){
  const {data}=await sb.from('chat').select('*').order('id',{ascending:false}).limit(60);
  if(!data)return;
  CH.list=data.reverse();
+ await fetchIcons(CH.list.map(m=>m.user_id));
  const el=$('#chlog');
  if(el&&st.tab=='chat'){
   const nearBottom=el.scrollHeight-el.scrollTop-el.clientHeight<40;
@@ -749,7 +893,7 @@ function dmThread(){
 function dmThreadHtml(){
  const L=dmThread();
  if(!L.length)return '<div><small>まだメッセージがありません。</small></div>';
- return L.map(m=>'<div class="'+(m.from_id==me.id?'me':'ot')+'"><small>'+fmt(m.at)+'</small><br><span>'+esc(m.msg)+'</span></div>').join('');
+ return L.map(m=>'<div class="'+(m.from_id==me.id?'me':'ot')+'"><small>'+fmt(m.at)+'</small><br>'+(m.from_id==me.id?'':ico(m.from_id,22)+' ')+'<span>'+esc(m.msg)+'</span></div>').join('');
 }
 function dm(){
  const parts={};
@@ -788,6 +932,7 @@ async function loadDM(){
  if(!data)return;
  const prevUn=DM.lastUn;
  DM.list=data.reverse();
+ await fetchIcons(DM.list.map(m=>m.from_id));
  const cmp=n=>(n||'').toLowerCase();
  if(st.tab=='dm'&&DM.open&&DM.to&&DM.list.some(m=>m.to_id==me.id&&!m.read&&cmp(dmPartner(m))==cmp(DM.to))){
   await sb.rpc('mark_read',{p_name:DM.to});
@@ -918,13 +1063,13 @@ setInterval(()=>{
  const win=H.find(h=>h.pl==0),tw=win?t-GATE_OPEN-win.Tf:-1;
  const rk=[...H].sort((a,b)=>(b.p>=1?100-b.pl:b.p)-(a.p>=1?100-a.pl:a.p)),lead=Math.max(...H.map(h=>h.p));
  if(CM.rid!=r.id)CM={rid:r.id,flags:{},lines:[],v:0,leader:0,lp:0,lt:0,sp:0,beat:0,snap:null,say:0};
- const F=CM.flags,tn=Date.now(),nm=h=>h.e.gate+'番 '+h.e.name+(h.e.jockey_id?'('+jn(h.e.jockey_id)+')':'');
+ const F=CM.flags,tn_=Date.now(),nm=h=>h.e.gate+'番 '+h.e.name+(h.e.jockey_id?'('+jn(h.e.jockey_id)+')':'');
  if(t-CM.lt>=.5){CM.sp=(lead-CM.lp)/(t-CM.lt);CM.lp=lead;CM.lt=t}
  if(t>=.2&&!F.gin){F.gin=1;say('各馬、ゲートに収まりました。',0);SFX.gate()}
  if(t>=GATE_OPEN&&!F.st){F.st=1;say('ゲートが開いた! 一斉にスタート!',1);SFX.start()}
- if(F.st&&t>GATE_OPEN+1.5&&lead<.68&&tn-CM.say>2000){
+ if(F.st&&t>GATE_OPEN+1.5&&lead<.68&&tn_-CM.say>2000){
   const L=rk[0];
-  if(L.e.gate!=CM.leader){say(CM.leader?'先頭が入れ替わった! '+nm(L)+'!':'飛び出したのは '+nm(L)+'!',0);CM.leader=L.e.gate;CM.say=tn}
+  if(L.e.gate!=CM.leader){say(CM.leader?'先頭が入れ替わった! '+nm(L)+'!':'飛び出したのは '+nm(L)+'!',0);CM.leader=L.e.gate;CM.say=tn_}
  }
  if(t>GATE_OPEN+6&&!F.pace){F.pace=1;say(CM.sp>.05?'ペースは速い! 先頭集団はハイペース!':'ペースは落ち着いている。各馬、脚を溜めています。',0)}
  if(lead>.68&&!F.cor){F.cor=1;CM.snap={};rk.forEach((h,i)=>{CM.snap[h.e.gate]=i});say('最終コーナーに差しかかる! 後方の馬が動き出す!',1)}
@@ -943,7 +1088,7 @@ setInterval(()=>{
   F.res=1;const by=[...H].sort((a,b)=>a.pl-b.pl);
   if(by[1]&&by[2])say('2着 '+nm(by[1])+' / 3着 '+nm(by[2]),0);
  }
- if(F.st&&lead<1&&tn>CM.beat){SFX.hoof();CM.beat=tn+Math.max(110,300-CM.sp*2400)}
+ if(F.st&&lead<1&&tn_>CM.beat){SFX.hoof();CM.beat=tn_+Math.max(110,300-CM.sp*2400)}
  cmShow();
  g.font='bold 10px monospace';
  rk.slice(0,4).forEach((h,k)=>{
@@ -988,7 +1133,7 @@ setInterval(()=>{
 },1000);
 setInterval(()=>{
  const tg=document.activeElement.tagName;
- if(me&&tg!='INPUT'&&tg!='SELECT')load();
+ if(me&&tg!='INPUT'&&tg!='SELECT'&&!document.getElementById('gc'))load();
  if(me&&st.tab=='shop'&&IT.shop&&Math.floor(Date.now()/3.6e6)!=IT.shop.hr)loadShop();
 },4000);
 setInterval(()=>{if(me&&st.tab=='chat')loadChat()},3000);
