@@ -3,211 +3,359 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><title>GWCG ゲームコーナー</title>
 <style>
 *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input{-webkit-user-select:text;user-select:text}
 body{margin:0;font:16px -apple-system,sans-serif;background:#0b1620;color:#eee;overscroll-behavior:none}
 header,nav{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#06101a;flex-wrap:wrap}header b{flex:1}
 button{font-size:16px;padding:10px 14px;margin:3px;border:0;border-radius:8px;background:#1d5a7a;color:#fff}
-button.on{background:#d4a017;color:#000}button.s{background:#a33}.c{color:#ffd34d;font-weight:700}
+button.on{background:#d4a017;color:#000}button.s{background:#a33}button:disabled{opacity:.4}.c{color:#ffd34d;font-weight:700}
 a.btn{display:inline-block;text-decoration:none;font-size:16px;padding:10px 14px;margin:3px;border-radius:8px;background:#2d5a44;color:#fff}
 main{padding:10px}.card{background:#12283a;border-radius:10px;padding:10px;margin:8px 0}
 table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px;border-bottom:1px solid #245}
 .box{max-width:360px;margin:15vh auto;text-align:center}input{font-size:18px;padding:10px;margin:6px;width:80%;border-radius:8px;border:0}
-canvas{width:100%;border-radius:10px;touch-action:none;background:#0a3a5a}
-.reel{display:inline-block;width:70px;height:70px;line-height:70px;font-size:34px;background:#fff;color:#000;border-radius:10px;margin:4px;text-align:center;font-weight:700}
+canvas{width:100%;display:block;border-radius:10px;touch-action:none;background:#0a3a5a}
+.hb{position:absolute;font-size:14px;padding:7px 10px;margin:0;background:#0b3a5acc;border:1px solid #8cf}
+#fp{position:absolute;inset:0;background:#06121cf2;border-radius:10px;overflow:auto;padding:10px;box-sizing:border-box;display:none}
+.reel{display:inline-block;width:84px;height:84px;line-height:84px;font-size:38px;background:#fff;color:#000;border-radius:12px;margin:4px;text-align:center;font-weight:700;border:4px solid #c93}
+.reel.go{background:#dde;color:#889}
 .tag{display:inline-block;border-radius:6px;padding:1px 6px;background:#345;font-size:12px}
-.cell{display:inline-block;width:56px;height:56px;border-radius:8px;background:#1d3a52;margin:2px;font-size:11px;text-align:center;vertical-align:top;padding:2px;box-sizing:border-box}
-.cell.me{background:#d4a017;color:#000}
+.cell{display:inline-block;width:62px;height:66px;border-radius:8px;background:#1d3a52;margin:2px;font-size:11px;text-align:center;vertical-align:top;padding:2px;box-sizing:border-box}
+.cell.me{background:#d4a017;color:#000}.cell.own{outline:2px solid #4f8}.cell.dst{outline:2px solid #f66}
+.bonus{background:linear-gradient(120deg,#f00,#fa0,#ff0,#0f0,#0ff,#00f,#f0f,#f00);background-size:500% 500%;animation:rbg 2s linear infinite;color:#000}
+@keyframes rbg{0%{background-position:0 50%}100%{background-position:500% 50%}}
+.lamp{display:inline-block;width:14px;height:14px;border-radius:50%;background:#333;margin:2px}.lamp.on{background:#ff3;box-shadow:0 0 8px #ff3}
 </style></head><body><div id="app"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 const sb=supabase.createClient('https://cntqlqvnruanmawtxiyp.supabase.co','sb_publishable_28BRrTAEoLeyOgcOCvc9FA_hg5Ej2wC');
 const $=s=>document.querySelector(s),y=n=>Number(n).toLocaleString();
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let me=null,P=null,tab='fish',FD=[],RODS=[],OWN=new Set(),rod=1,SG=null,HL=null,SL={r:['-','-','-'],msg:'',bet:100},FS=null,CELLS=[];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+let me=null,P=null,tab='fish',RODS=[],rod=1,SG=null,HL=null,CELLS=[];
+let SL={r:['7','BAR','🔔'],msg:'',bet:100,bonus:null,left:0,replay:false,spin:false,stop:[true,true,true],res:null,iv:null,at:null};
 const rcol={ノーマル:'#8cf',レア:'#7e7',超レア:'#fc3',ボス:'#f6c',伝説:'#fff'};
+const fcol={ノーマル:['#4f6a7a','#b8cfd8'],レア:['#2f7a55','#bfe8c8'],超レア:['#a8801f','#ffe9a0'],ボス:['#7a3a72','#f0c0e8'],伝説:['#b8901a','#fff6c0']};
+let AC=null;
+function beep(f,d,t,v){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state=='suspended')AC.resume();const o=AC.createOscillator(),g=AC.createGain();o.type=t||'square';o.frequency.value=f;g.gain.setValueAtTime(v||.05,AC.currentTime);g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+d);o.connect(g);g.connect(AC.destination);o.start();o.stop(AC.currentTime+d+.02)}catch(e){}}
+function fanfare(){[523,659,784,1047,1319,1568].forEach((f,i)=>setTimeout(()=>beep(f,.2,'triangle',.07),i*110))}
 
 function login(){$('#app').innerHTML='<div class=box><h2>🎮 GWCG ゲームコーナー</h2><p>競馬ゲームと同じアカウントでログインしてください。</p><input id=u placeholder="アカウント名"><input id=pw type=password placeholder="パスワード"><button onclick="auth()">ログイン</button><br><a class=btn href="index.html">🏇 競馬へ戻る</a></div>'}
 async function auth(){const u=$('#u').value.trim();const r=await sb.auth.signInWithPassword({email:u+'@gwc-game.com',password:$('#pw').value});if(r.error)alert(r.error.message)}
 sb.auth.onAuthStateChange((_,s)=>{me=s?s.user:null;if(me)boot();else login()});
 async function boot(){
- const [f,r,o]=await Promise.all([sb.from('fish_defs').select('*').order('id'),sb.from('rods').select('*').order('id'),sb.from('rod_own').select('rod_id')]);
- FD=f.data||[];RODS=r.data||[];OWN=new Set((o.data||[]).map(x=>x.rod_id));if(!OWN.has(rod))rod=1;
- const c=await sb.from('sg_cells').select('*').order('idx');CELLS=c.data||[];
- await refresh();
+ const [r,c,si,gi]=await Promise.all([sb.from('rods').select('*').order('id'),sb.from('sg2_cells').select('*').order('idx'),sb.rpc('slot_info'),sb.rpc('sg_info')]);
+ RODS=r.data||[];CELLS=c.data||[];
+ if(si.data){SL.bonus=si.data.bonus||null;SL.left=si.data.left||0;SL.replay=!!si.data.replay;if(si.data.bet)SL.bet=si.data.bet}
+ SG=gi.data||null;await refresh();
 }
-async function refresh(){const {data}=await sb.from('profiles').select('name,coins').eq('id',me.id).single();P=data;
- const o=await sb.from('rod_own').select('rod_id');OWN=new Set((o.data||[]).map(x=>x.rod_id));render()}
+async function refresh0(){const {data}=await sb.from('profiles').select('name,coins').eq('id',me.id).single();P=data;const e=$('#hc');if(e&&P)e.textContent='🪙'+y(P.coins)}
+async function refresh(){await refresh0();render()}
 function render(){
  if(!P)return;
+ if(tab!='fish'&&FG&&FG.raf){cancelAnimationFrame(FG.raf);FG.raf=0}
  const tabs=[['fish','🎣 釣り'],['slot','🎰 スロット'],['sg','🚃 すごろく'],['hl','🃏 ハイ&ロー']];
- $('#app').innerHTML='<header><b>🎮 GWCG</b><span>'+esc(P.name)+'</span><span class=c>🪙'+y(P.coins)+'</span><a class=btn href="index.html">🏇 競馬</a></header>'
+ $('#app').innerHTML='<header><b>🎮 GWCG</b><span>'+esc(P.name)+'</span><span class=c id=hc>🪙'+y(P.coins)+'</span><a class=btn href="index.html">🏇 競馬</a></header>'
  +'<nav>'+tabs.map(t=>'<button class="'+(tab==t[0]?'on':'')+'" onclick="tab=\''+t[0]+'\';render()">'+t[1]+'</button>').join('')+'</nav><main>'+({fish,slot,sg,hl})[tab]()+'</main>';
  if(tab=='fish')initFish();
 }
 
-/* ===== 釣り ===== */
-let FG=null;
+/* ================= 釣り ================= */
+let FG=null,EN={page:0,q:'',draft:'',cls:'',rows:[],total:0};
+const curRod=()=>RODS.find(r=>r.id==rod)||RODS[0]||{name:'-',fee:0,power:1};
 function fish(){
- const rr=RODS.find(r=>r.id==rod)||{};
- return '<div class=card><h3>🎣 釣りゲーム <small>(釣りスピリッツ風)</small></h3>'
- +'<div>使う竿: <select onchange="rod=Number(this.value);render()" style="font-size:16px;padding:8px">'+RODS.filter(r=>OWN.has(r.id)).map(r=>'<option value='+r.id+(r.id==rod?' selected':'')+'>'+esc(r.name)+'(参加料'+r.fee+')</option>').join('')+'</select></div>'
- +'<canvas id=fc width=640 height=400></canvas>'
- +'<div id=fm style="min-height:28px;margin-top:6px"></div>'
- +'<p><small>① 「キャスト」で投げる(参加料' +(rr.fee||100)+'コイン)。② 魚が掛かったら、<b>画面の右下のリールをぐるぐる回す</b>と巻き上げ、ゲージが赤いときは回すのを止めてテンションを下げます。③ 魚の体力を0にすれば釣り上げ。連続成功で配当が最大+50%。</small></p>'
- +'<button class=on id=cb onclick="cast()">🎣 キャスト</button><button id=sp onclick="special()">⚡必殺技(ゲージ満タンで使用)</button></div>'
- +'<div class=card><h4>🎣 釣竿ショップ</h4><table><tr><th>竿<th>性能<th>価格<th></tr>'+RODS.map(r=>'<tr><td>'+esc(r.name)+'<td>×'+r.power+'<td>🪙'+y(r.price)+'<td>'+(OWN.has(r.id)?'所持':'<button onclick="buyRod('+r.id+')">購入</button>')+'</tr>').join('')+'</table></div>'
- +'<div class=card><h4>🐟 魚図鑑</h4><table><tr><th>魚<th>クラス<th>配当</tr>'+FD.map(f=>'<tr><td>'+esc(f.name)+'<td><span class=tag style="color:'+rcol[f.cls]+'">'+f.cls+'</span><td>🪙'+y(f.pay)+'</tr>').join('')+'</table></div>';
+ const r=curRod();
+ return '<div class=card style="padding:6px"><div id=fw style="position:relative;width:100%;max-width:980px;margin:auto">'
+ +'<canvas id=fc width=800 height=500></canvas>'
+ +'<button class=hb style="top:40px;right:8px" onclick="openRod()">🎣 ロッド変更</button>'
+ +'<button class=hb style="top:84px;right:8px" onclick="openDex()">📖 魚図鑑</button>'
+ +'<button class=hb style="bottom:8px;left:8px" onclick="shock()">🔌 電撃(10)</button>'
+ +'<button class=hb style="bottom:52px;left:8px" onclick="special()">⚡ 必殺技</button>'
+ +'<button class="hb on" id=cb style="bottom:8px;left:50%;transform:translateX(-50%);font-size:17px;padding:10px 18px" onclick="cast()">🎣 浮き射出(🪙'+y(r.fee)+')</button>'
+ +'<div id=fp></div></div><div id=fm style="min-height:26px;margin-top:6px"></div>'
+ +'<p><small>① 画面をタップして浮きの位置を決め、「浮き射出」で投げます(竿ごとの料金がかかります)。② 魚が掛かったら、<b>右下のリールをぐるぐる回し続けて</b>巻き上げます。魚は常に引っ張り返してくるので、止めると引き戻されます。③ 画面が赤いときは巻くと糸に負担がかかるので、耐えます。④ 大物は、糸を噛みちぎって逃げることがあります。⑤ 電撃は、魚を一瞬止める演出です(効果はわずかです)。</small></p></div>';
 }
-async function buyRod(id){const {data,error}=await sb.rpc('rod_buy',{p_rod:id});if(error)alert(error.message);else alert(data);refresh()}
 function msg(t){const e=$('#fm');if(e)e.innerHTML=t}
+function closeP(){const p=$('#fp');if(p)p.style.display='none'}
+function openRod(){
+ const p=$('#fp');if(!p)return;
+ p.innerHTML='<div style="text-align:right"><button onclick="closeP()">✕ 閉じる</button></div><h3>🎣 ロッド変更</h3><p><small>料金が高い竿ほど、巻きやすく、レア以上の魚が出やすくなります。料金は、投げるたびにかかります。</small></p>'
+  +RODS.map(r=>'<div class=card style="'+(r.id==rod?'outline:2px solid #fc3':'')+'"><b>'+esc(r.name)+'</b> 　1回 <span class=c>🪙'+y(r.fee)+'</span> / 性能 ×'+r.power+' / ランク'+r.tier+'<br><small>'+esc(r.descr)+'</small><br><button class=on onclick="pickRod('+r.id+')">'+(r.id==rod?'使用中':'この竿を使う')+'</button></div>').join('');
+ p.style.display='block';
+}
+function pickRod(id){rod=id;const r=curRod();const b=$('#cb');if(b)b.textContent='🎣 浮き射出(🪙'+y(r.fee)+')';closeP()}
+function openDex(){const p=$('#fp');if(!p)return;p.style.display='block';loadDex()}
+async function loadDex(){
+ let q=sb.from('fish_defs').select('*',{count:'exact'});
+ if(EN.q)q=q.ilike('name','%'+EN.q.replace(/[%_\\]/g,'')+'%');
+ if(EN.cls)q=q.eq('cls',EN.cls);
+ const {data,count,error}=await q.order('id').range(EN.page*30,EN.page*30+29);
+ if(error){alert(error.message);return}
+ EN.rows=data||[];EN.total=count||0;
+ const pages=Math.max(1,Math.ceil(EN.total/30)),fee=curRod().fee;
+ const pg='<div><button onclick="EN.page=0;loadDex()">⏮</button><button onclick="EN.page=Math.max(0,EN.page-1);loadDex()">◀</button> <b>'+(EN.page+1)+' / '+pages+'</b> <button onclick="EN.page=Math.min('+(pages-1)+',EN.page+1);loadDex()">▶</button><button onclick="EN.page='+(pages-1)+';loadDex()">⏭</button></div>';
+ const p=$('#fp');if(!p)return;
+ p.innerHTML='<div style="text-align:right"><button onclick="closeP()">✕ 閉じる</button></div><h3>📖 魚図鑑 <small>('+y(EN.total)+'種)</small></h3>'
+  +'<input id=dq maxlength=20 placeholder="魚の名前で検索" value="'+esc(EN.draft)+'" style="width:50%" oninput="EN.draft=this.value" onkeydown="if(event.key==\'Enter\'){EN.q=EN.draft.trim();EN.page=0;loadDex()}"><button onclick="EN.q=EN.draft.trim();EN.page=0;loadDex()">🔍</button>'
+  +'<div>'+[['','全て'],['ノーマル','ノーマル'],['レア','レア'],['超レア','超レア'],['ボス','ボス'],['伝説','伝説']].map(c=>'<button class="'+(EN.cls==c[0]?'on':'')+'" onclick="EN.cls=\''+c[0]+'\';EN.page=0;loadDex()">'+c[1]+'</button>').join('')+'</div>'
+  +'<p><small>配当は、いま選んでいる竿(🪙'+y(fee)+')で釣り上げたときの金額です。</small></p>'+pg
+  +'<table><tr><th>魚<th>クラス<th>大きさ<th>配当</tr>'+EN.rows.map(f=>'<tr><td>'+esc(f.name)+'<td><span class=tag style="color:'+rcol[f.cls]+'">'+f.cls+'</span><td>'+f.sz+'cm<td>🪙'+y(Math.floor(fee*f.pm))+'</tr>').join('')+'</table>'+pg;
+}
+
+/* 背景(静的) */
+function makeBg(W,H){
+ const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+ let s=12345;const rnd=()=>{s=(s*1664525+1013904223)%4294967296;return s/4294967296};
+ const gr=g.createRadialGradient(W/2,H/2,60,W/2,H/2,W*.65);gr.addColorStop(0,'#e3d3a2');gr.addColorStop(.6,'#c8b685');gr.addColorStop(1,'#8f9a7a');g.fillStyle=gr;g.fillRect(0,0,W,H);
+ for(let i=0;i<2200;i++){g.fillStyle='rgba('+(rnd()<.5?'255,250,220':'120,100,60')+','+(.05+rnd()*.12)+')';g.fillRect(rnd()*W,rnd()*H,1+rnd()*2,1+rnd()*2)}
+ for(let i=0;i<40;i++){const x=rnd()*W,y2=rnd()*H;g.strokeStyle='rgba(140,120,80,.12)';g.lineWidth=2;g.beginPath();g.arc(x,y2,10+rnd()*40,rnd()*6,rnd()*6+1.5);g.stroke()}
+ const pal=[['#2c7f6a','#1a5446'],['#3da58a','#236e5c'],['#7aa63a','#4c6e22'],['#c24a73','#7c2748'],['#d6764a','#8c4326'],['#5b6fb8','#34417a'],['#8a4fa8','#573066']];
+ const clus=(cx,cy,rad,n)=>{for(let i=0;i<n;i++){const a=rnd()*6.28,d=rnd()*rad,x=cx+Math.cos(a)*d,y2=cy+Math.sin(a)*d,r=7+rnd()*20,p=pal[Math.floor(rnd()*pal.length)];
+  g.fillStyle='rgba(0,20,20,.3)';g.beginPath();g.arc(x+5,y2+6,r,0,7);g.fill();
+  const rg=g.createRadialGradient(x-r*.3,y2-r*.3,1,x,y2,r);rg.addColorStop(0,p[0]);rg.addColorStop(1,p[1]);g.fillStyle=rg;g.beginPath();g.arc(x,y2,r,0,7);g.fill();
+  g.fillStyle='rgba(255,255,255,.14)';for(let k=0;k<4;k++){g.beginPath();g.arc(x+(rnd()-.5)*r,y2+(rnd()-.5)*r,1+rnd()*2,0,7);g.fill()}}};
+ [[50,60],[90,170],[40,300],[70,430],[200,25],[420,15],[620,30],[760,70],[760,230],[740,470],[560,490],[30,490]].forEach(c=>clus(c[0],c[1],70,16));
+ [[720,140],[100,380],[300,460],[500,60]].forEach(c=>{g.fillStyle='rgba(210,90,70,.9)';for(let a=0;a<5;a++){g.save();g.translate(c[0],c[1]);g.rotate(a*1.256);g.beginPath();g.ellipse(14,0,15,4,0,0,7);g.fill();g.restore()}});
+ return c;
+}
+/* 魚の描画(上から見た図) */
+function drawFish(g,x,y,ang,len,ph,amp,mode,cl,alpha){
+ const N=14,top=[],bot=[],sp=[];
+ for(let i=0;i<=N;i++){const t=i/N,px=len*(.5-t),py=Math.sin(ph-t*4.5)*amp*len*.12*t*(.4+t),w=len*.15*Math.sin(Math.PI*Math.pow(t*.92+.04,.75))*(1-.4*t);
+  sp.push([px,py]);top.push([px,py-w,w]);bot.push([px,py+w,w])}
+ g.save();g.translate(x,y);g.rotate(ang);
+ const col=mode=='shadow'?'rgba(3,12,20,'+(alpha==null?.8:alpha)+')':null;
+ if(mode=='shadow'){g.shadowColor='rgba(0,0,0,.45)';g.shadowBlur=9}
+ const fin=(pts)=>{g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();g.fillStyle=col||cl[0];g.fill()};
+ const e=sp[N],fl=Math.sin(ph*1.3)*len*.04;
+ fin([[e[0],e[1]],[e[0]-len*.22,e[1]-len*.18+fl],[e[0]-len*.14,e[1]],[e[0]-len*.22,e[1]+len*.18+fl]]);
+ const a=top[4],b2=bot[4];
+ fin([[a[0],a[1]],[a[0]-len*.15,a[1]-len*.11-fl],[a[0]-len*.05,a[1]+len*.02]]);
+ fin([[b2[0],b2[1]],[b2[0]-len*.15,b2[1]+len*.11+fl],[b2[0]-len*.05,b2[1]-len*.02]]);
+ g.beginPath();g.moveTo(len*.53,0);top.forEach(p=>g.lineTo(p[0],p[1]));for(let i=N;i>=0;i--)g.lineTo(bot[i][0],bot[i][1]);g.closePath();
+ if(col)g.fillStyle=col;else{const gd=g.createLinearGradient(0,-len*.16,0,len*.16);gd.addColorStop(0,cl[0]);gd.addColorStop(.55,cl[1]);gd.addColorStop(1,'#fff');g.fillStyle=gd}
+ g.fill();g.shadowBlur=0;
+ if(!col){g.strokeStyle='rgba(0,0,0,.35)';g.lineWidth=1.2;g.stroke();g.strokeStyle='rgba(255,255,255,.35)';g.beginPath();sp.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.stroke();
+  g.fillStyle='#111';g.beginPath();g.arc(len*.38,-len*.045,Math.max(1.5,len*.018),0,7);g.arc(len*.38,len*.045,Math.max(1.5,len*.018),0,7);g.fill()}
+ g.restore();
+}
 function initFish(){
- const cv=$('#fc');if(!cv)return;
- if(FG&&FG.raf)cancelAnimationFrame(FG.raf);
- const g=cv.getContext('2d');
- const st={st:'idle',fish:null,hp:0,tension:0,ang:0,rot:0,mx:200,my:300,t0:0,gauge:0,sp:false,fx:[],bub:[],ripple:[],ms:0,mission:[{t:'ノーマルを4匹釣る',n:0,m:4,r:5000},{t:'連続で5匹釣る',n:0,m:5,r:7500}],timeLeft:180,last:performance.now(),dr:false,cx:0,cy:0};
- FG=st;
- for(let i=0;i<6;i++)st.bub.push({x:Math.random()*640,y:Math.random()*400,r:4+Math.random()*8,vx:.2+Math.random()*.5,s:1+Math.random()*2,k:Math.random()*6});
- const pos=e=>{const r=cv.getBoundingClientRect(),t=e.touches?e.touches[0]:e;return{x:(t.clientX-r.left)*640/r.width,y:(t.clientY-r.top)*400/r.height}};
- const RC={x:560,y:310,r:62};
- const down=e=>{e.preventDefault();const p=pos(e);if(Math.hypot(p.x-RC.x,p.y-RC.y)<RC.r+20){st.dr=true;st.cx=p.x;st.cy=p.y;st.la=Math.atan2(p.y-RC.y,p.x-RC.x)}else if(st.st=='idle'){st.mx=p.x;st.my=Math.min(p.y,350)}};
- const move=e=>{e.preventDefault();if(!st.dr)return;const p=pos(e);const a=Math.atan2(p.y-RC.y,p.x-RC.x);let d=a-st.la;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;st.rot+=Math.abs(d);st.ang+=d;st.la=a};
- const up=e=>{e.preventDefault();st.dr=false};
- cv.addEventListener('touchstart',down,{passive:false});cv.addEventListener('touchmove',move,{passive:false});cv.addEventListener('touchend',up,{passive:false});
- cv.addEventListener('mousedown',down);cv.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
- st.sil=(f,x,y,a,s)=>{g.save();g.translate(x,y);g.rotate(a);g.fillStyle='rgba(0,10,30,.85)';g.beginPath();g.ellipse(0,0,s,s*.32,0,0,7);g.fill();g.beginPath();g.moveTo(-s,0);g.lineTo(-s*1.35,-s*.3);g.lineTo(-s*1.35,s*.3);g.fill();g.beginPath();g.moveTo(-s*.1,-s*.3);g.lineTo(-s*.4,-s*.6);g.lineTo(s*.2,-s*.3);g.fill();g.restore()};
- loop();
- function loop(){
-  const now=performance.now(),dt=Math.min(.05,(now-st.last)/1000);st.last=now;
-  /* 背景 */
-  g.fillStyle='#bfae80';g.fillRect(0,0,640,400);
-  const gr=g.createRadialGradient(320,200,40,320,200,420);gr.addColorStop(0,'#d8c898');gr.addColorStop(1,'#6a8a8a');g.fillStyle=gr;g.fillRect(0,0,640,400);
-  g.fillStyle='#2a6a5a';[[40,40,60],[600,60,70],[30,360,70],[610,360,60],[320,10,50]].forEach(c=>{g.beginPath();g.arc(c[0],c[1],c[2],0,7);g.fill()});
-  g.fillStyle='#d56';[[70,330],[100,350],[560,40],[590,90]].forEach(c=>{g.beginPath();g.arc(c[0],c[1],7,0,7);g.fill()});
-  st.bub.forEach(b=>{b.x+=b.vx;b.k+=dt;if(b.x>680)b.x=-40;g.fillStyle='rgba(0,10,30,.35)';g.beginPath();g.ellipse(b.x,b.y+Math.sin(b.k)*20,b.r*3,b.r,0,0,7);g.fill()});
-  /* ミッション・HUD */
-  g.fillStyle='rgba(30,120,150,.8)';g.fillRect(0,0,230,18);g.fillStyle='#ffd34d';g.font='bold 14px sans-serif';g.fillText('Mission',6,14);
-  st.mission.forEach((m,i)=>{g.fillStyle='rgba(120,200,220,.85)';g.fillRect(0,22+i*26,300,22);g.fillStyle='#012';g.font='12px sans-serif';g.fillText(m.t+'  '+m.n+'/'+m.m,6,37+i*26);g.fillStyle='#fc3';g.fillText('🪙'+m.r,236,37+i*26)});
-  st.timeLeft=Math.max(0,st.timeLeft-dt);g.fillStyle='#fff';g.font='bold 18px sans-serif';g.fillText('のこり '+Math.ceil(st.timeLeft)+' 秒',250,16);
-  g.fillStyle='rgba(30,80,140,.85)';g.fillRect(470,2,168,26);g.fillStyle='#ffd34d';g.font='bold 18px sans-serif';g.fillText('🪙 '+y(P.coins),480,22);
-  /* ゲージ */
-  g.fillStyle='rgba(255,255,255,.3)';g.fillRect(8,150,16,120);g.fillStyle=st.gauge>=100?'#f80':'#fc3';g.fillRect(8,270-1.2*st.gauge,16,1.2*st.gauge);g.font='11px sans-serif';g.fillStyle='#fff';g.fillText(Math.floor(st.gauge)+'%',4,285);
-  /* リール */
-  g.fillStyle='#556';g.beginPath();g.arc(RC.x,RC.y,RC.r,0,7);g.fill();g.strokeStyle='#bcd';g.lineWidth=5;g.stroke();
-  g.save();g.translate(RC.x,RC.y);g.rotate(st.ang);g.fillStyle='#223';g.beginPath();g.arc(0,0,42,0,7);g.fill();g.fillStyle='#9cf';for(let i=0;i<8;i++){g.rotate(Math.PI/4);g.fillRect(36,-3,10,6)}g.fillStyle='#eef';g.beginPath();g.arc(48,-48,10,0,7);g.fill();g.restore();
-  g.fillStyle='#fff';g.font='11px sans-serif';g.fillText('回す',RC.x-12,RC.y+4);
-  /* 状態 */
-  if(st.st=='idle'){
-   g.strokeStyle='rgba(255,60,60,.8)';g.lineWidth=1;g.beginPath();g.moveTo(320,400);g.lineTo(st.mx,st.my);g.stroke();
-   g.fillStyle='#39f';g.beginPath();g.arc(st.mx,st.my,8,0,7);g.fill();
-   g.fillStyle='#fff';g.font='13px sans-serif';g.fillText('画面をタップしてルアーの位置を決め、「キャスト」',150,380);
-  }else if(st.st=='wait'){
-   g.strokeStyle='rgba(255,60,60,.8)';g.beginPath();g.moveTo(320,400);g.lineTo(st.mx,st.my);g.stroke();
-   g.fillStyle='#39f';g.beginPath();g.arc(st.mx,st.my,8,0,7);g.fill();
-   st.ripple.push({x:st.mx,y:st.my,r:2});st.ripple=st.ripple.filter(r=>(r.r+=.8)<30);st.ripple.forEach(r=>{g.strokeStyle='rgba(255,255,255,'+(1-r.r/30)+')';g.beginPath();g.arc(r.x,r.y,r.r,0,7);g.stroke()});
-  }else if(st.st=='fight'){
-   const f=st.fish;
-   f.k=(f.k||0)+dt*2;
-   const pull=(Math.sin(f.k*f.spd*1.7)+1)/2;       // 魚の引き(0〜1)
-   const danger=pull>0.62;                           // 赤ゲージ=回してはいけない
-   const reel=st.rot;st.rot=0;
-   st.tension=Math.max(0,st.tension-dt*18);
-   if(reel>0){
-    if(danger)st.tension+=reel*40*(1+f.diff*.12);else st.hp-=reel*(18+st.power*10)*(st.sp?2.5:1)*(1.1-f.diff*.02);
-    if(!danger)st.tension+=reel*8;
-   }
-   st.hp=Math.max(0,st.hp);
-   const ox=Math.sin(f.k)*40*f.spd,oy=Math.cos(f.k*.8)*30;
-   const fx=st.mx+ox,fy=st.my+oy;
-   g.strokeStyle='rgba(255,60,60,.9)';g.lineWidth=1;g.beginPath();g.moveTo(320,400);g.lineTo(fx,fy);g.stroke();
-   st.sil(f,fx,fy,Math.atan2(oy,ox)+Math.PI,Math.min(60,10+f.sz*.5));
-   g.fillStyle='#39f';g.beginPath();g.arc(fx,fy,6,0,7);g.fill();
-   st.ripple.push({x:fx,y:fy,r:2});st.ripple=st.ripple.filter(r=>(r.r+=1.2)<40);st.ripple.forEach(r=>{g.strokeStyle='rgba(255,255,255,'+(1-r.r/40)+')';g.beginPath();g.arc(r.x,r.y,r.r,0,7);g.stroke()});
-   /* 体力ゲージとテンション */
-   g.fillStyle='rgba(0,0,0,.5)';g.fillRect(180,48,280,14);g.fillStyle='#4f8';g.fillRect(180,48,280*st.hp/st.hpMax,14);g.fillStyle='#fff';g.font='12px sans-serif';g.fillText(f.name+'('+f.cls+')',182,44);
-   g.fillStyle='rgba(0,0,0,.5)';g.fillRect(180,66,280,10);g.fillStyle=st.tension>70?'#f33':'#fc3';g.fillRect(180,66,Math.min(280,280*st.tension/100),10);
-   g.fillStyle=danger?'rgba(255,0,0,.35)':'rgba(0,255,100,.18)';g.fillRect(0,0,640,400);
-   g.fillStyle='#fff';g.font='bold 22px sans-serif';g.fillText(danger?'⚠ 巻くな!(耐えろ)':'🔄 回して巻け!',230,110);
-   if(st.tension>=100){end(false,'糸が切れた…')}
-   else if(st.hp<=0){end(true)}
-   else if(performance.now()-st.t0>90000){end(false,'逃げられた…')}
-   if(!st.sp)st.gauge=Math.min(100,st.gauge+dt*3);
-  }else if(st.st=='result'){
-   g.fillStyle='rgba(0,0,0,.6)';g.fillRect(120,120,400,140);g.fillStyle=st.res.ok?'#fc3':'#f88';g.font='bold 26px sans-serif';g.textAlign='center';
-   g.fillText(st.res.ok?'🎉 '+st.res.name+' 釣り上げ!':'😢 逃げられた…',320,165);g.font='20px sans-serif';g.fillStyle='#fff';
-   if(st.res.ok)g.fillText('+🪙'+y(st.res.pay)+'(連続'+st.res.combo+')',320,205);g.textAlign='left';
-  }
-  FG.raf=requestAnimationFrame(loop);
- }
- st.end=end;
- async function end(ok,why){
-  if(st.st!='fight')return;
-  const ms=Math.round(performance.now()-st.t0);
-  st.st='landing';
+ const cv=$('#fc');
+ if(FG&&FG.raf){cancelAnimationFrame(FG.raf);FG.raf=0}
+ if(!cv)return;
+ const g=cv.getContext('2d'),W=800,H=500,bg=makeBg(W,H),PL={x:400,y:495},RC={x:690,y:385,r:88};
+ const mk=()=>({x:Math.random()*W,y:80+Math.random()*300,ang:Math.random()*6.28,len:40+Math.random()*60,ph:Math.random()*6,v:20+Math.random()*30,tr:0});
+ const S=FG={st:'idle',t:0,tx:400,ty:220,ang:0,rot:0,dr:false,la:0,gauge:0,sp:0,stun:0,ripple:[],decor:[mk(),mk(),mk(),mk(),mk(),mk()],last:performance.now(),data:null,
+  mission:[{t:'ノーマルを4匹釣り上げる',n:0,m:4},{t:'連続で5匹釣り上げる',n:0,m:5}],d:.8,hp:1,hpMax:1,tension:0,k:0,fl:0,wt:0,bt:0,res:null,raf:0,wob:0,hf:null,flash:0,arcs:[]};
+ const pos=e=>{const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}};
+ cv.onpointerdown=e=>{e.preventDefault();try{cv.setPointerCapture(e.pointerId)}catch(_){}const p=pos(e);
+  if(Math.hypot(p.x-RC.x,p.y-RC.y)<RC.r+25){S.dr=true;S.la=Math.atan2(p.y-RC.y,p.x-RC.x)}else if(S.st=='idle'){S.tx=clamp(p.x,70,730);S.ty=clamp(p.y,80,330)}};
+ cv.onpointermove=e=>{if(!S.dr)return;e.preventDefault();const p=pos(e),a=Math.atan2(p.y-RC.y,p.x-RC.x);let d=a-S.la;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;S.rot+=Math.abs(d);S.ang+=d;S.la=a};
+ cv.onpointerup=cv.onpointercancel=()=>{S.dr=false};
+ S.end=async(ok,why)=>{
+  if(S.st!='fight'&&S.st!='bite')return;
+  const ms=Math.round(performance.now()-S.t0);S.st='landing';
   try{
-   const {data,error}=await sb.rpc('fish_land',{p_tok:st.tok,p_ok:ok,p_ms:ms});
-   if(error)throw error;
-   st.res=data;st.st='result';
-   if(data.ok){st.gauge=Math.min(100,st.gauge+25);
-    if(data.cls=='ノーマル'){st.mission[0].n=Math.min(4,st.mission[0].n+1)}
-    st.mission[1].n=data.combo>=1?Math.min(5,data.combo):0;
-   }else{st.mission[1].n=0}
-   if(!data.ok&&why)msg(why);
+   const {data,error}=await sb.rpc('fish_land',{p_tok:S.data.tok,p_ok:ok,p_ms:ms});if(error)throw error;
+   S.res=data;S.res.fish=S.data;S.st='result';S.rt=0;
+   if(data.ok){S.gauge=Math.min(100,S.gauge+25);if(data.cls=='ノーマル')S.mission[0].n=Math.min(4,S.mission[0].n+1);S.mission[1].n=Math.min(5,data.combo);beep(988,.15,'square',.06);setTimeout(()=>beep(1319,.2,'square',.06),130)}
+   else{S.mission[1].n=0;msg(why||'逃げられた…')}
    await refresh0();
-  }catch(e){alert(e.message);st.st='idle'}
-  setTimeout(()=>{if(FG===st){st.st='idle';st.sp=false;const b=$('#cb');if(b)b.disabled=false}},2500);
+  }catch(e){alert(e.message);S.st='idle';const b=$('#cb');if(b)b.disabled=false}
+ };
+ const ripple=(x,y2,sp,mx)=>{S.ripple.push({x:x,y:y2,r:2,sp:sp,mx:mx})};
+ function lureAt(x,y2,s){g.fillStyle='#fff';g.beginPath();g.arc(x,y2,6*s,0,7);g.fill();g.fillStyle='#e33';g.beginPath();g.arc(x,y2,3.5*s,0,7);g.fill();g.strokeStyle='#222';g.lineWidth=1;g.beginPath();g.arc(x,y2,6*s,0,7);g.stroke()}
+ function line(x,y2,sag,col){g.strokeStyle=col||'rgba(255,255,255,.85)';g.lineWidth=1.4;g.beginPath();g.moveTo(PL.x,PL.y);g.quadraticCurveTo((PL.x+x)/2+sag,(PL.y+y2)/2,x,y2);g.stroke()}
+ function loop(now){
+  const dt=Math.min(.05,(now-S.last)/1000);S.last=now;S.t+=dt;
+  g.drawImage(bg,0,0);
+  /* 光の揺らぎ */
+  g.save();for(let k=0;k<18;k++){const x=((k*137+S.t*(14+k%4*6))%(W+200))-100,y2=(k*83+Math.sin(S.t*.6+k)*40)%H;g.fillStyle='rgba(255,255,235,'+(.05+.03*Math.sin(S.t+k))+')';g.beginPath();g.ellipse(x,y2,50+k%5*14,22+k%3*10,k,0,7);g.fill()}g.restore();
+  g.strokeStyle='rgba(40,120,70,.55)';g.lineWidth=3;for(let k=0;k<14;k++){const bx=k<7?10+k*14:W-10-(k-7)*14,by=H-5;g.beginPath();g.moveTo(bx,by);g.quadraticCurveTo(bx+Math.sin(S.t*1.5+k)*10,by-30,bx+Math.sin(S.t*1.5+k+1)*16,by-60-k%3*14);g.stroke()}
+  /* 周りの魚影 */
+  S.decor.forEach(f=>{f.ph+=dt*4;f.x+=Math.cos(f.ang)*f.v*dt;f.y+=Math.sin(f.ang)*f.v*dt;f.ang+=Math.sin(S.t*.4+f.len)*dt*.3;
+   if(f.x<-120||f.x>W+120||f.y<-120||f.y>H+120){f.x=W/2+Math.cos(f.ang+3)*500;f.y=H/2+Math.sin(f.ang+3)*350}
+   drawFish(g,f.x,f.y,f.ang,f.len,f.ph,.8,'shadow',null,.5)});
+  /* 状態 */
+  if(S.st=='idle'){
+   g.strokeStyle='rgba(255,255,255,.7)';g.lineWidth=1.5;g.setLineDash([6,5]);g.beginPath();g.arc(S.tx,S.ty,14+Math.sin(S.t*4)*2,0,7);g.moveTo(S.tx-22,S.ty);g.lineTo(S.tx+22,S.ty);g.moveTo(S.tx,S.ty-22);g.lineTo(S.tx,S.ty+22);g.stroke();g.setLineDash([]);
+   g.fillStyle='rgba(0,0,0,.35)';g.fillRect(250,455,300,22);g.fillStyle='#fff';g.font='13px sans-serif';g.textAlign='center';g.fillText('タップで狙う位置を決めて「浮き射出」',400,471);g.textAlign='left';
+  }else if(S.st=='flying'){
+   S.fl=Math.min(1,S.fl+dt/.75);const p=S.fl,x=PL.x+(S.tx-PL.x)*p,y2=PL.y+(S.ty-PL.y)*p-Math.sin(Math.PI*p)*150;
+   line(x,y2,0);lureAt(x,y2-0,1+Math.sin(Math.PI*p)*.5);
+   if(p>=1&&S.data){ripple(S.tx,S.ty,60,50);beep(220,.12,'sine',.08);S.st='wait';S.wt=1.3+Math.random()*1.8;S.wt0=S.wt;
+    const a=Math.random()*6.28;S.hf={x:S.tx+Math.cos(a)*420,y:S.ty+Math.sin(a)*300,ph:0};msg('…ルアーを沈めています…')}
+  }else if(S.st=='wait'){
+   S.wt-=dt;const p=1-S.wt/S.wt0;line(S.tx,S.ty,0);lureAt(S.tx,S.ty+Math.sin(S.t*3)*1.5,1);
+   if(Math.random()<dt*2)ripple(S.tx,S.ty,40,30);
+   const h=S.hf,k=clamp(p,0,1),hx=h.x+(S.tx-h.x)*k,hy=h.y+(S.ty-h.y)*k;h.ph+=dt*5;
+   drawFish(g,hx,hy,Math.atan2(S.ty-h.y,S.tx-h.x),Math.min(190,S.data.sz*1.5),h.ph,1,'shadow',null,.45+.4*k);
+   if(S.wt<=0){S.st='fight';S.t0=performance.now();S.k=0;S.d=.78;S.hpMax=100+S.data.diff*40;S.hp=S.hpMax;S.tension=0;S.flash=.4;S.fleeAt=.3+Math.random()*.25;
+    ripple(S.tx,S.ty,120,70);ripple(S.tx,S.ty,90,50);beep(520,.1,'square',.07);msg('<b class=c>HIT!!</b> '+esc(S.data.name)+'('+S.data.cls+')')}
+  }else if(S.st=='fight'||S.st=='bite'){
+   const f=S.data,len=Math.min(210,f.sz*1.5);
+   S.k+=dt*2;
+   const reel=S.st=='fight'?S.rot:0;S.rot=0;
+   const pull=(Math.sin(S.k*f.spd*1.7)+1)/2,danger=pull>.62&&S.stun<=0;
+   S.sp=Math.max(0,S.sp-dt);S.stun=Math.max(0,S.stun-dt);
+   if(S.st=='fight'){
+    const pw=S.data.power;
+    let drift=(.03+.012*f.diff)*f.spd*(.35+.65*S.hp/S.hpMax)*(danger?2.2:1)*(S.stun>0?.45:1);
+    S.tension=Math.max(0,S.tension-dt*16);
+    if(reel>0){if(danger){S.tension+=reel*38*(1+f.diff*.1)/Math.sqrt(pw);S.d-=reel*.004*pw}else{S.d-=reel*.010*pw*(S.sp>0?2.5:1);S.hp-=reel*(8+pw*8)*(S.sp>0?2.5:1);S.tension+=reel*7/Math.sqrt(pw)}}
+    S.hp=Math.max(1,S.hp);S.d+=drift*dt;
+    if(f.flee&&S.d<=S.fleeAt){S.st='bite';S.bt=0;msg('⚠ 魚が糸に噛みついた!!')}
+    else if(S.tension>=100)S.end(false,'糸が切れた…');
+    else if(S.d>=1.0)S.end(false,'糸が出きって逃げられた…');
+    else if(S.d<=.06)S.end(true);
+    else if(performance.now()-S.t0>100000)S.end(false,'逃げられた…');
+    if(!S.sp)S.gauge=Math.min(100,S.gauge+dt*2);
+   }else{
+    S.bt+=dt;S.tension=Math.min(99,S.tension+dt*60);
+    if(S.bt>=1.5)S.end(false,'糸を噛みちぎられた…!');
+   }
+   const dx=S.tx-PL.x,dy=S.ty-PL.y,L=Math.hypot(dx,dy)||1,nx=-dy/L,ny=dx/L;
+   const wob=Math.sin(S.k*1.3)*70*f.spd*S.d+Math.sin(S.k*2.9)*22,dd=S.st=='bite'?S.d+Math.max(0,S.bt-1)*1.2:S.d;
+   let fx=PL.x+dx*dd+nx*wob,fy=PL.y+dy*dd+ny*wob;
+   if(S.st=='bite'){fx+=(Math.random()-.5)*14;fy+=(Math.random()-.5)*14}
+   fx=clamp(fx,-60,W+60);fy=clamp(fy,-60,H);
+   const ang=Math.atan2(fy-PL.y,fx-PL.x)+Math.sin(S.k*3.3)*(danger?.5:.28);
+   const mx=fx+Math.cos(ang)*len*.5,my=fy+Math.sin(ang)*len*.5;
+   ripple(fx,fy,100,45);
+   const amp=S.stun>0?.25:(danger?1.9:1.3);
+   S.flash=Math.max(0,S.flash-dt);
+   const pha=S.k*8*(S.stun>0?.3:1);
+   if(S.stun>0&&Math.random()<.7){S.arcs.push({x:fx,y:fy,t:.12,a:Math.random()*6.28})}
+   const bitten=S.st=='bite'&&S.bt>1;
+   if(!bitten){
+    const vib=S.st=='bite'?(Math.random()-.5)*8:(danger?(Math.random()-.5)*3:0);
+    g.strokeStyle=danger||S.st=='bite'?'rgba(255,90,90,.95)':'rgba(255,255,255,.85)';g.lineWidth=1.5;g.beginPath();g.moveTo(PL.x,PL.y);g.quadraticCurveTo((PL.x+mx)/2+vib+(danger?0:12),(PL.y+my)/2,mx,my);g.stroke();
+   }else{
+    const t2=S.bt-1,cx=(PL.x+mx)/2,cy=(PL.y+my)/2;
+    g.strokeStyle='rgba(255,255,255,.85)';g.lineWidth=1.5;g.beginPath();g.moveTo(PL.x,PL.y);g.quadraticCurveTo(PL.x+(cx-PL.x)*(1-t2*1.6),PL.y+(cy-PL.y)*(1-t2*1.6)-t2*30,PL.x+(cx-PL.x)*(1-t2*1.6)*1.3,PL.y+(cy-PL.y)*(1-t2*1.6)*1.3-t2*40);g.stroke();
+    g.strokeStyle='rgba(255,255,255,.6)';g.beginPath();g.moveTo(mx,my);g.lineTo(mx+(Math.random()-.5)*30,my+(Math.random()-.5)*30);g.stroke();
+    g.fillStyle='rgba(255,255,200,'+(1-t2*2)+')';g.beginPath();g.arc((PL.x+mx)/2,(PL.y+my)/2,Math.max(1,18*(.5-t2)),0,7);g.fill();
+   }
+   drawFish(g,fx,fy,ang+Math.PI,len,pha,amp,'shadow',null,S.stun>0?.5+.3*Math.sin(S.t*40):.85);
+   if(!bitten)lureAt(mx,my,.9);
+   S.arcs=S.arcs.filter(a=>(a.t-=dt)>0);S.arcs.forEach(a=>{g.strokeStyle='rgba(120,230,255,.95)';g.lineWidth=2;g.beginPath();let px=a.x,py=a.y;g.moveTo(px,py);for(let i=0;i<5;i++){px+=Math.cos(a.a+i)*14+(Math.random()-.5)*14;py+=Math.sin(a.a+i)*14+(Math.random()-.5)*14;g.lineTo(px,py)}g.stroke()});
+   /* 画面の赤み */
+   if(danger||S.st=='bite'){g.fillStyle='rgba(255,0,0,'+(.18+.1*Math.sin(S.t*16))+')';g.fillRect(0,0,W,H)}
+   /* HUD */
+   g.fillStyle='rgba(0,0,0,.5)';g.fillRect(230,6,340,14);g.fillStyle='#5f9';g.fillRect(230,6,340*S.hp/S.hpMax,14);
+   g.fillStyle='rgba(0,0,0,.5)';g.fillRect(230,24,340,10);g.fillStyle=S.tension>70?'#f33':'#fc3';g.fillRect(230,24,Math.min(340,340*S.tension/100),10);
+   g.fillStyle='#fff';g.font='bold 13px sans-serif';g.fillText(f.name+'('+f.cls+') 距離 '+Math.max(0,Math.round(S.d*60))+'m',232,50);
+   g.textAlign='center';g.font='bold 24px sans-serif';g.fillStyle='#fff';g.fillText(S.st=='bite'?'⚠ 糸を噛みちぎる気だ!!':danger?'⚠ 引きが強い!(巻くな)':'🔄 回し続けろ!!',400,95);g.textAlign='left';
+   if(S.flash>0){g.fillStyle='rgba(255,255,255,'+S.flash*1.5+')';g.fillRect(0,0,W,H)}
+  }else if(S.st=='result'||S.st=='landing'){
+   if(S.res){S.rt+=dt;const r=S.res;
+    g.fillStyle='rgba(0,20,40,.62)';g.fillRect(0,0,W,H);
+    if(r.ok){const p=clamp(S.rt/.6,0,1),f=S.data;drawFish(g,400,250-Math.sin(Math.PI*p)*60,-Math.PI/2+Math.sin(S.t*6)*.1,Math.min(280,f.sz*2.2),S.t*6,.5,'color',fcol[f.cls]||fcol.ノーマル);}
+    g.textAlign='center';g.fillStyle=r.ok?'#fc3':'#f88';g.font='bold 30px sans-serif';g.fillText(r.ok?'🎉 '+r.name+' 釣り上げ!':'😢 逃げられた…',400,70);
+    if(r.ok){g.font='22px sans-serif';g.fillStyle='#fff';g.fillText('['+r.cls+']  +🪙'+y(r.pay)+'   連続'+r.combo,400,440)}g.textAlign='left';
+    if(S.rt>2.8){S.res=null;S.st='idle';S.sp=0;const b=$('#cb');if(b)b.disabled=false}}
+  }
+  /* 波紋 */
+  S.ripple=S.ripple.filter(r=>(r.r+=r.sp*dt)<r.mx);S.ripple.forEach(r=>{g.strokeStyle='rgba(255,255,255,'+(.7*(1-r.r/r.mx))+')';g.lineWidth=1.5;g.beginPath();g.arc(r.x,r.y,r.r,0,7);g.stroke()});
+  /* HUD(共通) */
+  g.fillStyle='rgba(30,120,150,.8)';g.fillRect(0,0,200,18);g.fillStyle='#ffd34d';g.font='bold 14px sans-serif';g.fillText('Mission',6,14);
+  S.mission.forEach((m,i)=>{g.fillStyle='rgba(120,200,220,.85)';g.fillRect(0,22+i*24,215,20);g.fillStyle='#012';g.font='12px sans-serif';g.fillText(m.t+'  '+m.n+'/'+m.m,5,36+i*24)});
+  const r0=curRod();g.fillStyle='rgba(0,0,0,.45)';g.fillRect(0,72,215,34);g.fillStyle='#fff';g.font='12px sans-serif';g.fillText('🎣 '+r0.name,5,87);g.fillText('1回 🪙'+y(r0.fee)+' / 性能×'+r0.power,5,101);
+  g.fillStyle='rgba(30,80,140,.85)';g.fillRect(612,4,184,28);g.fillStyle='#ffd34d';g.font='bold 18px sans-serif';g.fillText('🪙 '+y(P?P.coins:0),620,24);
+  g.fillStyle='rgba(255,255,255,.3)';g.fillRect(10,330,16,110);g.fillStyle=S.gauge>=100?'#f80':'#fc3';g.fillRect(10,440-1.1*S.gauge,16,1.1*S.gauge);g.fillStyle='#fff';g.font='11px sans-serif';g.fillText(Math.floor(S.gauge)+'%',8,325);
+  /* リール */
+  g.save();g.translate(RC.x,RC.y);const rg=g.createRadialGradient(0,0,10,0,0,RC.r);rg.addColorStop(0,'#667');rg.addColorStop(1,'#334');g.fillStyle=rg;g.beginPath();g.arc(0,0,RC.r,0,7);g.fill();g.strokeStyle='#cde';g.lineWidth=6;g.stroke();
+  g.rotate(S.ang);g.fillStyle='#1a2030';g.beginPath();g.arc(0,0,60,0,7);g.fill();g.fillStyle='#8bd';for(let i=0;i<12;i++){g.rotate(Math.PI/6);g.fillRect(52,-3,14,6)}
+  g.strokeStyle='#9ac';g.lineWidth=3;for(let i=0;i<3;i++){g.rotate(Math.PI*2/3);g.beginPath();g.moveTo(0,0);g.lineTo(54,0);g.stroke()}
+  g.fillStyle='#eef';g.beginPath();g.arc(66,-30,12,0,7);g.fill();g.restore();
+  g.fillStyle='#fff';g.font='12px sans-serif';g.textAlign='center';g.fillText('回す',RC.x,RC.y+4);g.textAlign='left';
+  S.raf=requestAnimationFrame(loop);
  }
+ S.raf=requestAnimationFrame(loop);
 }
-async function refresh0(){const {data}=await sb.from('profiles').select('name,coins').eq('id',me.id).single();P=data}
 async function cast(){
- const st=FG;if(!st||st.st!='idle')return;
- const b=$('#cb');b.disabled=true;
- const {data,error}=await sb.rpc('fish_cast',{p_rod:rod});
- if(error){alert(error.message);b.disabled=false;return}
- st.st='wait';msg('…ルアーを沈めています…');await refresh0();
- const w=1200+Math.random()*1800;
- setTimeout(()=>{
-  if(FG!==st)return;
-  st.fish={name:data.name,cls:data.cls,diff:data.diff,spd:data.spd,sz:data.sz};st.tok=data.tok;st.power=data.power;
-  st.hpMax=100+data.diff*45;st.hp=st.hpMax;st.tension=0;st.st='fight';st.t0=performance.now();
-  msg('<b class=c>HIT!!</b> '+esc(data.name)+'('+data.cls+')');
- },w);
+ const S=FG;if(!S||S.st!='idle')return;closeP();
+ const b=$('#cb');b.disabled=true;S.st='flying';S.fl=0;S.data=null;
+ try{const {data,error}=await sb.rpc('fish_cast',{p_rod:rod});if(error)throw error;S.data=data;refresh0()}
+ catch(e){alert(e.message);S.st='idle';b.disabled=false}
 }
-function special(){const st=FG;if(!st||st.st!='fight')return;if(st.gauge<100){msg('ゲージが足りません');return}st.gauge=0;st.sp=true;st.hp=Math.max(0,st.hp-st.hpMax*.5);msg('⚡必殺技!! 魚の体力を大きく削った!')}
+async function shock(){
+ const S=FG;if(!S||S.st!='fight'){msg('魚が掛かっているときに使えます');return}
+ try{const {error}=await sb.rpc('fish_shock',{p_tok:S.data.tok});if(error)throw error;S.stun=1.6;refresh0();beep(1400,.1,'sawtooth',.06);msg('🔌 電撃!! 魚が一瞬止まった!')}catch(e){msg(esc(e.message))}
+}
+function special(){const S=FG;if(!S||S.st!='fight'){msg('魚が掛かっているときに使えます');return}if(S.gauge<100){msg('ゲージが足りません');return}S.gauge=0;S.sp=5;S.hp=Math.max(1,S.hp*.5);S.d=Math.max(.1,S.d-.2);S.flash=.3;msg('⚡必殺技!! 5秒間、巻く力が大幅にアップ!')}
 
-/* ===== スロット ===== */
+/* ================= スロット ================= */
+const POOL=['7','BAR','🔔','🍉','🍒','REP'];
 function slot(){
- return '<div class=card><h3>🎰 スロット</h3><div style="text-align:center">'+SL.r.map(x=>'<span class=reel>'+x+'</span>').join('')+'</div>'
- +'<p style="text-align:center;min-height:24px">'+SL.msg+'</p>'
- +'<div>BET: '+[100,500,1000,5000,10000].map(b=>'<button class="'+(SL.bet==b?'on':'')+'" onclick="SL.bet='+b+';render()">'+y(b)+'</button>').join('')+'</div>'
- +'<button class=on onclick="spin()" style="font-size:22px;padding:14px 30px">🎰 回す</button>'
- +'<p><small>7×3=100倍 / BAR=50 / 🔔=20 / 🍉=10 / 🍒=6 / 🍋=4 / REP=3 / 🍒が2個=2倍 / 左に🍒=1倍(約90%還元)</small></p></div>';
+ const bz=SL.bonus;
+ return '<div class="card'+(bz?' bonus':'')+'"><h3>🎰 スロット <small>(内部抽選・BIG/REG・リプレイ)</small></h3>'
+ +(bz?'<div style="font-size:22px;font-weight:700;text-align:center">'+(bz=='big'?'🌟 BIG BONUS':'⭐ REG BONUS')+' 残り'+SL.left+'G(賭け金なし)</div>':'')
+ +(SL.replay?'<div style="text-align:center"><b>🔁 リプレイ(次回の賭け金なし)</b></div>':'')
+ +'<div id=reels style="text-align:center;margin:8px 0">'+[0,1,2].map(i=>'<span class=reel id=rl'+i+'>'+SL.r[i]+'</span>').join('')+'</div>'
+ +'<div style="text-align:center"><span class=lamp id=lp0></span><span class=lamp id=lp1></span><span class=lamp id=lp2></span></div>'
+ +'<p id=slm style="text-align:center;min-height:26px;font-size:18px">'+(SL.msg||'')+'</p>'
+ +'<div style="text-align:center"><button class=on id=lv onclick="lever()" style="font-size:22px;padding:14px 30px"'+(SL.spin?' disabled':'')+'>🎰 レバーON</button></div>'
+ +'<div style="text-align:center">'+[0,1,2].map(i=>'<button id=st'+i+' onclick="stopReel('+i+')" '+(SL.spin&&!SL.stop[i]?'':'disabled')+' style="font-size:20px;padding:14px 22px">⏹ '+['左','中','右'][i]+'</button>').join('')+'</div>'
+ +'<div style="text-align:center">BET: '+[100,500,1000,5000,10000].map(b=>'<button class="'+(SL.bet==b?'on':'')+'" '+((SL.spin||bz)?'disabled':'')+' onclick="SL.bet='+b+';render()">'+y(b)+'</button>').join('')+'</div>'
+ +'<p><small>役: 🔔ベル(2.5倍)/🍉スイカ(4倍)/🍒チェリー(2倍)/REPリプレイ(次回無料)。7-7-7=BIG(24G)、7-7-BAR=REG(8G)のボーナス突入。ボーナス中は賭け金なしで、ほぼ毎ゲームベルが揃います。全体で払戻率は約88%です。ボタンで1つずつ停止します(6秒で自動停止)。</small></p></div>';
 }
-async function spin(){
- const {data,error}=await sb.rpc('slot_spin',{p_bet:SL.bet});if(error){alert(error.message);return}
- SL.r=data.r;SL.msg=data.pay>0?'<b class=c>🎉 '+data.mult+'倍! +🪙'+y(data.pay)+'</b>':'ハズレ';await refresh();
+function setReel(i,s,go){const e=$('#rl'+i);if(e){e.textContent=s;e.className='reel'+(go?' go':'')}}
+async function lever(){
+ if(SL.spin)return;
+ const {data,error}=await sb.rpc('slot_spin',{p_bet:SL.bet});
+ if(error){alert(error.message);return}
+ beep(300,.15,'square');SL.res=data;SL.spin=true;SL.stop=[false,false,false];SL.msg='';
+ const m=$('#slm');if(m)m.textContent='';
+ $('#lv').disabled=true;[0,1,2].forEach(i=>{$('#st'+i).disabled=false});
+ clearInterval(SL.iv);SL.iv=setInterval(()=>{[0,1,2].forEach(i=>{if(!SL.stop[i])setReel(i,POOL[Math.floor(Math.random()*POOL.length)],true)})},70);
+ clearTimeout(SL.at);SL.at=setTimeout(()=>{[0,1,2].forEach(i=>stopReel(i))},6000);
+}
+function stopReel(i){
+ if(!SL.spin||SL.stop[i])return;
+ SL.stop[i]=true;setReel(i,SL.res.r[i],false);beep(180+i*60,.1,'triangle',.08);
+ const b=$('#st'+i);if(b)b.disabled=true;const r=SL.res.r;
+ if(SL.stop[0]&&SL.stop[1]&&!SL.stop[2]&&r[0]=='7'&&r[1]=='7'){const m=$('#slm');if(m)m.textContent='🔥 リーチ!!';beep(880,.3,'sawtooth',.06);[0,1,2].forEach(k=>{const l=$('#lp'+k);if(l)l.classList.add('on')})}
+ if(SL.stop.every(x=>x))finishSpin();
+}
+async function finishSpin(){
+ clearInterval(SL.iv);clearTimeout(SL.at);SL.spin=false;
+ const d=SL.res;SL.r=d.r;SL.bonus=d.bonus||null;SL.left=d.left||0;SL.replay=!!d.replay;
+ const nm={big:'🌟 BIG BONUS!!',reg:'⭐ REG BONUS!',bell:'🔔 ベル',melon:'🍉 スイカ',cherry:'🍒 チェリー',replay:'🔁 リプレイ',miss:'ハズレ'};
+ SL.msg='<b class=c>'+(nm[d.role]||'')+(d.pay>0?' +🪙'+y(d.pay):'')+'</b>';
+ if(d.role=='big'||d.role=='reg')fanfare();else if(d.pay>0){beep(988,.15,'square',.06);setTimeout(()=>beep(1319,.2,'square',.06),130)}
+ await refresh();
 }
 
-/* ===== すごろく ===== */
+/* ================= すごろく ================= */
+const CARD={express:'急行カード(サイコロ3個)',limited:'特急カード(サイコロ4個)',exorcist:'貧乏神退散カード'};
+const KI={start:'🏁',prop:'🏠',plus:'➕',minus:'➖',card:'🃏',bonby:'👹'};
 function sg(){
- let h='<div class=card><h3>🚃 すごろく <small>(桃鉄風・日本一周)</small></h3>';
- h+='<div>'+CELLS.map(c=>'<span class="cell'+(SG&&SG.pos==c.idx?' me':'')+'">'+esc(c.name)+'<br>'+(c.kind=='gain'?'+'+c.val:c.kind=='lose'?'-'+c.val:'')+'</span>').join('')+'</div>';
- if(SG&&!SG.over){h+='<p>ターン '+SG.turn+'/12 / 所持金 <b class=c>'+y(SG.pocket)+'</b></p><p>'+esc(SG.msg||'')+'</p><button class=on onclick="roll()" style="font-size:20px">🎲 サイコロを振る</button>'}
- else{h+='<p>'+(SG&&SG.over?'<b class=c>終了! 🪙'+y(SG.pay)+'を獲得</b> '+esc(SG.msg||''):'1周の参加料は5,000コイン。止まったマスのお金が、ゴール時に払い戻されます。')+'</p><button class=on onclick="sgStart()">🚃 参加(🪙5,000)</button>'}
- return h+'<p><small>12ターン以内にゴール(+20,000)を目指します。貧乏神・台風・ボンビーに注意。</small></p></div>';
+ let h='<div class=card><h3>🚃 すごろく <small>(桃鉄風・日本一周・参加無料)</small></h3>';
+ const own=new Set(SG?SG.props:[]);
+ h+='<div>'+CELLS.map(c=>'<span class="cell'+(SG&&SG.pos==c.idx?' me':'')+(own.has(c.idx)?' own':'')+(SG&&SG.dest==c.idx?' dst':'')+'">'+(SG&&SG.pos==c.idx?'🚃':KI[c.kind])+(SG&&SG.dest==c.idx?'🎯':'')+(own.has(c.idx)?'🏠✔':'')+'<br>'+esc(c.name)+'<br>'+(c.kind=='prop'?c.price:c.kind=='plus'?'+'+c.val:c.kind=='minus'?'-'+c.val:'')+'</span>').join('')+'</div>';
+ if(SG&&!SG.over){
+  const dn=CELLS.find(c=>c.idx==SG.dest);
+  h+='<p>'+(1+Math.floor(SG.turn/12))+'年目 '+((SG.turn%12)+1)+'月 / 所持金 <b class=c>'+y(SG.money)+'万円</b> / 物件'+SG.props.length+'件'+(SG.bonby?' / 👹貧乏神':'')+'</p>'
+   +'<p>🎯目的地: <b>'+esc(dn?dn.name:'?')+'</b>(到着で+3000万円)</p><p>'+esc(SG.msg||'')+'</p>';
+  if(SG.pending!=null){const pc=CELLS.find(c=>c.idx==SG.pending);h+='<p><b>'+esc(pc.name)+'を買いますか?(価格'+pc.price+'万円・月収'+pc.val+'万円)</b></p><button class=on onclick="buyP(true)">🏠 買う</button><button onclick="buyP(false)">見送る</button>'}
+  else h+='<button class=on onclick="roll()" style="font-size:20px">🎲 サイコロを振る</button>'+(SG.cards||[]).map(c=>'<button onclick="roll(\''+c+'\')">🃏 '+CARD[c]+'</button>').join('');
+ }else h+='<p>'+(SG&&SG.over?'<b class=c>終了! 🪙'+y(SG.pay)+'を獲得</b> '+esc(SG.msg||''):'24か月で資産を増やします。物件を買うと毎月の収入が入ります。最終資産が1億円を超えた分の2倍のコインがもらえます(上限20万)。')+'</p><button class=on onclick="sgStart()">🚃 スタート(無料)</button>';
+ return h+'<p><small>止まった物件駅は購入できます。目的地を通過すると+3000万円で貧乏神も離れます。スタートを通過すると給料+1000万円。</small></p></div>';
 }
-async function sgStart(){const {data,error}=await sb.rpc('sg_start');if(error){alert(error.message);return}SG=data;SG.msg='スタート!';await refresh()}
-async function roll(){const {data,error}=await sb.rpc('sg_roll');if(error){alert(error.message);return}SG=data;SG.msg='🎲'+data.d+'+'+data.d2+' '+data.msg;await refresh()}
+async function sgStart(){const {data,error}=await sb.rpc('sg_start');if(error){alert(error.message);return}SG=data;SG.msg='スタート!';render()}
+async function roll(c){const {data,error}=await sb.rpc('sg_roll',{p_card:c||null});if(error){alert(error.message);return}SG=data;SG.msg='🎲'+data.d+' '+data.msg;if(data.over)await refresh();else render()}
+async function buyP(yes){const {data,error}=await sb.rpc('sg_buy',{p_yes:yes});if(error){alert(error.message);return}SG=data;if(data.over)await refresh();else render()}
 
-/* ===== ハイ&ロー ===== */
+/* ================= ハイ&ロー ================= */
 function hl(){
  const bet=[100,500,1000,5000,10000];
  return '<div class=card><h3>🃏 ハイ&ロー</h3>'
  +(HL&&!HL.over?'<div style="font-size:60px;text-align:center">'+HL.c+'</div><p style="text-align:center">連続'+(HL.n||0)+'回'+(HL.win?' / 回収 🪙'+y(HL.win):'')+'</p>'
   +'<button class=on onclick="guess(true)">⬆ ハイ</button><button class=on onclick="guess(false)">⬇ ロー</button>'+((HL.n||0)>=1?'<button onclick="hlCash()">💰 回収する</button>':'')
-  :'<p>'+(HL&&HL.over?(HL.cashed?'<b class=c>回収! +🪙'+y(HL.pay)+'</b>':'ハズレ…(次は '+HL.c+')'):'数字(1〜13)が、次に高いか低いかを当てます。連続で当てるほど×1.8倍ずつ増えます。')+'</p><div>BET: '+bet.map(b=>'<button class="'+((HL&&HL.bet==b||(!HL&&b==100))?'on':'')+'" onclick="hlStart('+b+')">🃏 '+y(b)+'で開始</button>').join('')+'</div>')
+  :'<p>'+(HL&&HL.over?(HL.cashed?'<b class=c>回収! +🪙'+y(HL.pay)+'</b>':'ハズレ…(次は '+HL.c+')'):'数字(1〜13)が次に高いか低いかを当てます。連続で当てるほど×1.8倍ずつ増えます。')+'</p><div>'+bet.map(b=>'<button onclick="hlStart('+b+')">🃏 '+y(b)+'で開始</button>').join('')+'</div>')
  +'</div>';
 }
 async function hlStart(b){const {data,error}=await sb.rpc('hl_start',{p_bet:b});if(error){alert(error.message);return}HL={c:data.c,n:0,bet:b};await refresh()}
 async function guess(hi){const {data,error}=await sb.rpc('hl_guess',{p_hi:hi});if(error){alert(error.message);return}
- if(data.over){HL={c:data.c,over:true,bet:HL.bet}}else{HL={c:data.c,n:data.n,win:data.win,bet:HL.bet}}await refresh()}
+ if(data.over)HL={c:data.c,over:true,bet:HL.bet};else HL={c:data.c,n:data.n,win:data.win,bet:HL.bet};await refresh()}
 async function hlCash(){const {data,error}=await sb.rpc('hl_cash');if(error){alert(error.message);return}HL={over:true,cashed:true,pay:data.pay,c:'-'};await refresh()}
 </script></body></html>
