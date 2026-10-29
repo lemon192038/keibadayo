@@ -344,6 +344,7 @@ function render(){
  const un=dmUnread();
  const tabs=[['race','レース'],['watch','📺レース観戦'],['zukan','馬図鑑・購入'],['stable','馬房'],['bag','🎒バッグ'],['shop','🛒ショップ'],['jockey','🏇騎手'],['bets','馬券履歴'],['prize','賞金履歴'],['award','🏅称号・実績'],['rank','ランキング'],['code','🎟コード'],['gacha','🎰ガチャ'],['chat','💬チャット'],['dm','✉️DM'+(un?'('+un+')':'')],['profile','👤プロフィール']];
  $('#app').innerHTML='<header><span onclick="setTab(\'profile\')" style="cursor:pointer">'+ico(me.id,34)+'</span><b>🏇 GWCG</b><span>'+(D.p.title_name?tn(D.p.title_name)+' ':'')+esc(D.p.name)+'</span><span class=c>🪙'+y(shown())+'</span>'
+  +'<a href="games.html" style="color:#fff;background:#1d5a7a;padding:10px 14px;border-radius:8px;text-decoration:none">🎮ゲーム</a>'
  +'<button onclick="startTut()">❓</button>'
  +'<button onclick="SND=!SND;if(SND)ac();render()">'+(SND?'🔊':'🔇')+'</button>'
  +'<button onclick="sb.auth.signOut()">ログアウト</button></header>'
