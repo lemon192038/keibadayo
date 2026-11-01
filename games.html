@@ -336,99 +336,186 @@ async function finishSpin(){
  if(d.role=='big'||d.role=='reg')fanfare();else if(d.pay>0){beep(988,.15,'square',.06);setTimeout(()=>beep(1319,.2,'square',.06),130)}
  await refresh();
 }
-
-/* ================= 日本地図すごろく ================= */
+/* ================= 日本地図すごろく(全操作を画面内で完結) ================= */
+const SGCOST=200;
 const KIC={prop:'🏠',blue:'🟦',red:'🟥',card:'🟨',god:'🟪',anchor:'⚓️',lottery:'💰',full:'満',exorcise:'❇️',dice:'🎲'};
-const KNM={prop:'物件',blue:'お金が増える',red:'お金が減る',card:'カード',god:'貧乏神',anchor:'港',lottery:'宝くじ',full:'満タン',exorcise:'退散',dice:'もう一回'};
+const COLK={prop:'#c4c',blue:'#27d',red:'#d22',card:'#eb2',god:'#82c',anchor:'#2ab',lottery:'#fa2',full:'#6c6',exorcise:'#7e7',dice:'#fff'};
 const GODN=['なし','ミニビンボー','貧乏神','ピンポー','ビッグビンボー','バラマキビンボー','キングビンボー'];
 const OUTL=[[[140.3,41.2],[141.4,41.4],[141.5,40.5],[142.0,39.6],[141.9,38.3],[141.0,37.0],[140.8,36.0],[140.8,35.7],[140.1,35.2],[139.8,35.1],[139.6,35.3],[139.1,34.9],[138.8,34.6],[138.2,34.6],[137.3,34.6],[136.9,34.9],[136.9,34.3],[136.3,33.8],[135.7,33.5],[135.2,33.9],[135.1,34.3],[135.4,34.6],[134.7,34.7],[133.9,34.4],[132.4,34.2],[131.5,34.0],[130.9,33.95],[131.6,34.4],[132.4,35.0],[133.3,35.5],[134.4,35.6],[135.4,35.6],[136.0,35.6],[136.7,36.3],[137.3,37.2],[138.5,37.4],[139.4,38.1],[139.8,39.2],[140.1,40.0],[139.9,40.7]],
  [[140.0,41.5],[141.0,41.8],[141.2,42.5],[143.3,42.0],[145.5,43.3],[145.2,44.0],[143.5,44.3],[142.0,45.5],[141.6,45.5],[141.6,43.8],[140.3,43.3],[139.9,42.7]],
  [[132.4,33.8],[133.3,34.2],[134.2,34.3],[134.7,34.1],[134.3,33.6],[133.6,33.3],[132.9,32.9],[132.4,33.4]],
  [[130.9,33.9],[131.9,33.6],[131.9,32.8],[131.5,31.4],[130.7,31.0],[130.2,31.4],[130.2,32.5],[129.7,32.7],[129.7,33.3],[130.4,33.6]],
  [[127.6,26.1],[127.9,26.1],[127.9,26.5],[127.7,26.7],[127.6,26.4]]];
-let MP=null,SGLOG=[],SGBUSY=false;
 const px=lon=>(lon-126)*36+20,py=lat=>(46.2-lat)*34+10;
+let MP=null,SGLOG=[],SGBUSY=false,SGI={};
+let ZM={x:380,y:360,s:3};
+let SGK={raf:0,load:false,hits:[],panel:null,ov:false,reel:null,dice:null,big:null,toast:null};
+
 function sg(){
- let h='<div class=card><h3>🚃 日本地図すごろく <small>(桃鉄風・参加無料・'+SGS.length+'駅)</small></h3><canvas id=sgm width=760 height=760></canvas>';
- const live=SG&&!SG.over;
- if(live){
-  const dn=SGS.find(s=>s.idx==SG.dest),dg=SG.dg&&typeof SG.dg=='object'?SG.dg:null;
-  h+='<p>'+(1+Math.floor(SG.turn/12))+'年目 '+((SG.turn%12)+1)+'月 / 所持金 <b class=c>'+y(SG.money)+'万円</b> / 物件 '+SG.props.length+'/8 '+(SG.god>0?' / 👹 <b style="color:#f66">'+GODN[SG.god]+'</b>':'')+'</p>'
-   +'<p>🎯 目的地: <b>'+esc(dn?dn.name:'?')+'</b>(あと道のり'+SG.dist+'マス以上・基礎ボーナス '+y(SG.dist*400)+'万円)</p>';
-  if(SG.props.length)h+='<p><small>🏠 '+SG.props.map(p=>esc(p.n)).join(' / ')+'</small></p>';
-  h+='<div id=sgr></div>';
-  if(dg){
-   h+='<div class=card style="background:#2a1a3a"><b>🎯 目的地ゲーム!</b><br>終了の目は <b class=c>'+dg.a+'</b> と <b class=c>'+dg.b+'</b>。この目が出るまで振り続けます(外れた回数×1.5×基礎ボーナス)。<br>これまで外れ '+dg.n+'回<br><button class=on onclick="dgRoll()" style="font-size:20px">🎲 サイコロを振る</button></div>';
-  }else{
-   h+='<button class=on onclick="roll()" style="font-size:20px">🎲 サイコロを振る</button>';
-   h+='<div>'+(SG.cards||[]).map(c=>{const d=SGC[c.c];if(!d)return '';return '<button onclick="'+(d.ctype=='dice'?'roll('+c.c+')':'useCard('+c.c+')')+'">🃏 '+esc(d.name)+' ×'+c.u+'</button>'}).join('')+'</div>';
-  }
-  h+='<button class=s onclick="quit()">🏁 ここで終了して精算</button>';
- }else{
-  h+='<p>'+(SG&&SG.over?'<b class=c>終了! 🪙'+y(SG.pay)+'を獲得</b>':'東京をスタートに36か月プレイします。物件は8つ集まると決算で収入になります。精算では、(最終資産−1億円)÷20 がコインになります(上限3,000)。')+'</p><button class=on onclick="sgStart()">🚃 スタート(無料)</button>';
- }
- h+='<div id=sgl>'+SGLOG.map(l=>'<div><small>'+esc(l)+'</small></div>').join('')+'</div>';
- h+='<p><small>凡例: '+Object.keys(KIC).map(k=>KIC[k]+'='+KNM[k]).join(' / ')+'。サイコロの目の数だけ、自動で目的地に近づくように進みます。目的地にぴったり止まると、ボーナスと目的地ゲームです。貧乏神は、同時に遊んでいる別のプレイヤーが止まっている駅を通ると、その人に移ります。</small></p></div>';
- return h;
+ return '<div class=card style="padding:6px"><canvas id=sgm width=800 height=620></canvas>'
+ +'<p><small>操作はすべて画面内のボタンで行います。サイコロを振るたびに🪙'+SGCOST+'かかります。🟦お金が増える/🟥お金が減る/🟨カード/🏠物件/🟪貧乏神/⚓️港/💰宝くじ/満=カード回数満タン/❇️貧乏神退散/🎲もう一回。ズーム中は、近い16マスだけを表示します。「🗾全体」で日本全体を見られます。</small></p></div>';
 }
-let ZM={x:0,y:0,s:3.2};
-function drawMap(){
- const cv=$('#sgm');if(!cv)return;const g=cv.getContext('2d');
- const M={};SGS.forEach(s=>M[s.idx]=s);
- const cur=M[MP!=null?MP:(SG?SG.pos:null)];
- const tx=cur?px(cur.lon):380,ty=cur?py(cur.lat):380;
- ZM.x+=(tx-ZM.x)*.35;ZM.y+=(ty-ZM.y)*.35;
- const S2=ZM.s;
- g.setTransform(1,0,0,1,0,0);g.fillStyle='#13405e';g.fillRect(0,0,760,760);
- g.setTransform(S2,0,0,S2,380-ZM.x*S2,380-ZM.y*S2);
- g.fillStyle='#5f8a52';g.strokeStyle='#cde8c0';g.lineWidth=2/S2*1.2;
- OUTL.forEach(o=>{g.beginPath();o.forEach((p,i)=>i?g.lineTo(px(p[0]),py(p[1])):g.moveTo(px(p[0]),py(p[1])));g.closePath();g.fill();g.stroke()});
- const vis=s=>Math.abs(px(s.lon)-ZM.x)<190/S2*1.1&&Math.abs(py(s.lat)-ZM.y)<190/S2*1.1;
- g.strokeStyle='#d8c8a0';g.lineWidth=5/S2*1.3;
- SGE.forEach(e=>{const a=M[e.a],b=M[e.b];if(!a||!b||!(vis(a)||vis(b)))return;g.beginPath();g.moveTo(px(a.lon),py(a.lat));g.lineTo(px(b.lon),py(b.lat));g.stroke()});
- g.strokeStyle='#444';g.setLineDash([2/S2,3/S2]);g.lineWidth=2.4/S2*1.3;
- SGE.forEach(e=>{const a=M[e.a],b=M[e.b];if(!a||!b||!(vis(a)||vis(b)))return;g.beginPath();g.moveTo(px(a.lon),py(a.lat));g.lineTo(px(b.lon),py(b.lat));g.stroke()});
- g.setLineDash([]);
- const COLK={prop:'#c4c',blue:'#27d',red:'#d22',card:'#eb2',god:'#82c',anchor:'#2ab',lottery:'#fa2',full:'#6c6',exorcise:'#7e7',dice:'#fff'};
- const r0=8/S2*1.15;
- g.textAlign='center';
- SGS.forEach(s=>{if(!vis(s))return;const x=px(s.lon),y2=py(s.lat);
-  g.fillStyle='rgba(0,0,0,.3)';g.fillRect(x-r0+1/S2,y2-r0+2/S2,r0*2,r0*2);
-  g.fillStyle=COLK[s.kind]||'#999';g.fillRect(x-r0,y2-r0,r0*2,r0*2);
-  g.strokeStyle='#fff';g.lineWidth=1.2/S2*1.3;g.strokeRect(x-r0,y2-r0,r0*2,r0*2);
-  g.font=(11/S2*1.4)+'px sans-serif';g.fillStyle='#000';g.fillText(KIC[s.kind]||'',x,y2+4/S2*1.4);
-  g.font='bold '+(9/S2*1.5)+'px sans-serif';g.lineWidth=3/S2*1.5;g.strokeStyle='#fff';g.fillStyle='#222';g.strokeText(s.name,x,y2-r0-3/S2);g.fillText(s.name,x,y2-r0-3/S2)});
- if(SG){const d=M[SG.dest];if(d){g.font=(26/S2*1.5)+'px sans-serif';g.fillStyle='#fc3';g.fillText('★',px(d.lon),py(d.lat)-r0*2.2)}
-  if(cur){const x=px(cur.lon),y2=py(cur.lat),r=r0*1.7;g.fillStyle='rgba(255,40,40,.92)';g.beginPath();g.arc(x,y2,r,0,7);g.fill();g.strokeStyle='#fff';g.lineWidth=2.5/S2*1.3;g.stroke();g.font=(r*1.5)+'px sans-serif';g.fillStyle='#fff';g.fillText('🚃',x,y2+r*.5)}}
- g.textAlign='left';g.setTransform(1,0,0,1,0,0);
- if(SG){const d=M[SG.dest];if(d){const dx=px(d.lon)-ZM.x,dy=py(d.lat)-ZM.y,L=Math.hypot(dx,dy)*S2;
-  if(L>340){const a=Math.atan2(dy,dx);g.fillStyle='#fc3';g.font='bold 18px sans-serif';g.fillText('★'+d.name,380+Math.cos(a)*300-20,380+Math.sin(a)*300)}}}
- if(Math.abs(tx-ZM.x)>.3||Math.abs(ty-ZM.y)>.3)requestAnimationFrame(drawMap);
+function drawMap(){initSG()}
+async function loadSGMap(){
+ const pg=async(t,o)=>{let out=[],p=0;for(;;){let q=sb.from(t).select('*');o.forEach(c=>{q=q.order(c)});const {data,error}=await q.range(p*1000,p*1000+999);if(error||!data)break;out=out.concat(data);if(data.length<1000)break;p++}return out};
+ const [s,e]=await Promise.all([pg('sg_st',['idx']),pg('sg_edge',['a','b'])]);
+ if(s.length)SGS=s;SGE=e.filter(x=>x.a<x.b);SGI={};SGS.forEach(x=>{SGI[x.idx]=x});
+}
+function initSG(){
+ const cv=$('#sgm');if(!cv)return;
+ if(SGK.raf)cancelAnimationFrame(SGK.raf);
+ if(!SGK.load){SGK.load=true;loadSGMap()}
+ if(!Object.keys(SGI).length)SGS.forEach(x=>{SGI[x.idx]=x});
+ cv.onpointerdown=e=>{e.preventDefault();const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*800/r.width,y=(e.clientY-r.top)*620/r.height;
+  for(let i=SGK.hits.length-1;i>=0;i--){const h=SGK.hits[i];if(x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h){h.f();break}}};
+ const g=cv.getContext('2d');
+ const loop=t=>{if(!$('#sgm')||tab!='sg'){SGK.raf=0;return}try{drawSG(g,t/1000)}catch(e){console.error(e)}SGK.raf=requestAnimationFrame(loop)};
+ SGK.raf=requestAnimationFrame(loop);
+}
+function btn(g,x,y,w,h,label,f,col,dis){
+ g.fillStyle=dis?'#345':(col||'#1d5a7a');g.fillRect(x,y,w,h);g.strokeStyle='#fff';g.lineWidth=2;g.strokeRect(x,y,w,h);
+ g.fillStyle=dis?'#789':(col=='#d4a017'?'#000':'#fff');g.font='bold 17px sans-serif';g.textAlign='center';g.fillText(label,x+w/2,y+h/2+6);g.textAlign='left';
+ if(!dis)SGK.hits.push({x,y,w,h,f});
+}
+function block(){SGK.hits.push({x:0,y:0,w:800,h:620,f:()=>{}})}
+function panelBox(g,x,y,w,h,title){
+ g.fillStyle='rgba(5,15,30,.92)';g.fillRect(x,y,w,h);g.strokeStyle='#fc3';g.lineWidth=3;g.strokeRect(x,y,w,h);
+ g.fillStyle='#fc3';g.font='bold 22px sans-serif';g.textAlign='center';g.fillText(title,x+w/2,y+36);g.textAlign='left';
+}
+function text(g,s,x,y,sz,col,al){g.font=(sz||16)+'px sans-serif';g.fillStyle=col||'#fff';g.textAlign=al||'left';g.fillText(s,x,y);g.textAlign='left'}
+
+/* 貧乏神のドット絵 */
+const GODC=[null,['#b9a6e8','#6a4fa8'],['#a8714a','#5b3418'],['#f08ab4','#9b3a68'],['#d94a3a','#7a1a12'],['#4fb06a','#1d5a30'],['#f1c232','#8a6a00']];
+const GODSC=[0,.7,.9,1,1.15,1.3,1.5];
+const GODB=["...oooooo...","..oOOOOOOo..",".oOwOOOOwOo.",".oOOOOOOOOo.",".oORRRRRROo.","..oOOOOOOo..",".oOOOOOOOOo.","oOOOoOOoOOOo","oOO.oOOo.OOo","..oOo..oOo..","..ooo..ooo.."];
+function drawGod(g,cx,cy,size,rank,t){
+ if(!rank)return;
+ const c=GODC[rank],p=size*GODSC[rank]/12,bob=Math.sin(t*3)*p*.8,x0=cx-6*p,y0=cy-5.5*p+bob;
+ g.fillStyle='rgba(80,0,120,.35)';g.beginPath();g.ellipse(cx,cy+6*p+bob,7*p,2*p,0,0,7);g.fill();
+ GODB.forEach((row,j)=>{for(let i=0;i<12;i++){const ch=row[i];if(ch=='.')continue;g.fillStyle=ch=='o'?c[1]:ch=='O'?c[0]:ch=='w'?'#fff':'#d22';g.fillRect(x0+i*p,y0+j*p,p+.5,p+.5)}});
+ g.fillStyle='#111';g.fillRect(x0+3*p,y0+2*p,p,p);g.fillRect(x0+8*p,y0+2*p,p,p);
+ if(rank>=3){g.fillStyle='#fff';g.fillRect(x0+2*p,y0-p,p,p);g.fillRect(x0+9*p,y0-p,p,p);if(rank>=4){g.fillRect(x0+2*p,y0-2*p,p,p);g.fillRect(x0+9*p,y0-2*p,p,p)}}
+ if(rank==5){g.fillStyle='#fc3';g.fillRect(x0+11*p,y0+6*p,3*p,3*p);g.fillStyle='#a60';g.fillRect(x0+12*p,y0+7*p,p,p)}
+ if(rank==6){g.fillStyle='#fd4';g.fillRect(x0+2*p,y0-2*p,8*p,p*1.5);[2,4,6,8].forEach(i=>g.fillRect(x0+i*p,y0-3.2*p,p,p*1.3));g.fillStyle='#e22';g.fillRect(x0+5*p,y0-2*p,p,p)}
+}
+
+function drawSG(g,t){
+ SGK.hits=[];const W=800,H=620;
+ g.fillStyle='#13405e';g.fillRect(0,0,W,H);
+ const live=!!(SG&&!SG.over&&SG.god!==undefined);
+ const cur=SG?SGI[MP!=null?MP:SG.pos]:null;
+ const ov=SGK.ov||!live;
+ const ts=ov?.85:18,tx=ov?380:(cur?px(cur.lon):380),ty=ov?360:(cur?py(cur.lat):360);
+ ZM.s+=(ts-ZM.s)*.1;ZM.x+=(tx-ZM.x)*.25;ZM.y+=(ty-ZM.y)*.25;
+ const S=ZM.s,zoomed=S>6,scr=(x,y)=>[400+(x-ZM.x)*S,300+(y-ZM.y)*S];
+ /* 陸地 */
+ g.fillStyle='#4f8a4a';g.strokeStyle='#cde8c0';g.lineWidth=2;
+ OUTL.forEach(o=>{g.beginPath();o.forEach((p,i)=>{const q=scr(px(p[0]),py(p[1]));i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])});g.closePath();g.fill();g.stroke()});
+ /* 表示するマス */
+ let set=SGS;
+ if(zoomed){const c=[];for(const s of SGS){const dx=px(s.lon)-ZM.x,dy=py(s.lat)-ZM.y,d=dx*dx+dy*dy;if(d<900)c.push([d,s])}
+  c.sort((a,b)=>a[0]-b[0]);set=c.slice(0,16).map(x=>x[1]);
+  if(cur&&!set.includes(cur)){set.pop();set.push(cur)}}
+ const inS=zoomed?new Set(set.map(s=>s.idx)):null;
+ g.strokeStyle='#d8c8a0';g.lineWidth=zoomed?S*1.1:2.2;
+ for(const e of SGE){if(zoomed&&!(inS.has(e.a)&&inS.has(e.b)))continue;const a=SGI[e.a],b=SGI[e.b];if(!a||!b)continue;
+  const A=scr(px(a.lon),py(a.lat)),B=scr(px(b.lon),py(b.lat));if(A[0]<-50&&B[0]<-50||A[0]>850&&B[0]>850)continue;g.beginPath();g.moveTo(A[0],A[1]);g.lineTo(B[0],B[1]);g.stroke()}
+ if(zoomed){g.strokeStyle='#443';g.setLineDash([6,10]);g.lineWidth=3;
+  for(const e of SGE){if(!(inS.has(e.a)&&inS.has(e.b)))continue;const a=SGI[e.a],b=SGI[e.b];if(!a||!b)continue;const A=scr(px(a.lon),py(a.lat)),B=scr(px(b.lon),py(b.lat));g.beginPath();g.moveTo(A[0],A[1]);g.lineTo(B[0],B[1]);g.stroke()}g.setLineDash([])}
+ for(const s of set){const q=scr(px(s.lon),py(s.lat));if(q[0]<-60||q[0]>860||q[1]<-60||q[1]>680)continue;
+  const named=!!s.name,cs=zoomed?(named?5.4:4.6)*S:(named?5.5:4.4)*S+(named?1:.5);
+  if(zoomed){g.fillStyle='rgba(0,0,0,.35)';g.fillRect(q[0]-cs/2+4,q[1]-cs/2+6,cs,cs)}
+  g.fillStyle=COLK[s.kind]||'#999';g.fillRect(q[0]-cs/2,q[1]-cs/2,cs,cs);
+  if(zoomed||cs>5){g.strokeStyle='#fff';g.lineWidth=zoomed?3:1;g.strokeRect(q[0]-cs/2,q[1]-cs/2,cs,cs)}
+  if(zoomed){g.font=(cs*.55)+'px sans-serif';g.textAlign='center';g.fillStyle='#000';g.fillText(KIC[s.kind]||'',q[0],q[1]+cs*.2);
+   if(named){g.font='bold 15px sans-serif';g.lineWidth=4;g.strokeStyle='#fff';g.strokeText(s.name,q[0],q[1]-cs/2-6);g.fillStyle='#222';g.fillText(s.name,q[0],q[1]-cs/2-6)}g.textAlign='left'}}
+ /* 目的地・コマ・貧乏神 */
+ if(SG&&live){const d=SGI[SG.dest];
+  if(d){const q=scr(px(d.lon),py(d.lat));
+   if(q[0]>30&&q[0]<770&&q[1]>70&&q[1]<530){g.font=(ov?22:50)+'px sans-serif';g.textAlign='center';g.fillStyle='#fc3';g.strokeStyle='#000';g.lineWidth=4;g.strokeText('★',q[0],q[1]-(ov?6:50));g.fillText('★',q[0],q[1]-(ov?6:50));
+    if(ov){g.font='bold 14px sans-serif';g.strokeStyle='#fff';g.lineWidth=3;g.strokeText(d.name,q[0],q[1]+18);g.fillStyle='#a30';g.fillText(d.name,q[0],q[1]+18)}g.textAlign='left'}
+   else{const a=Math.atan2(q[1]-300,q[0]-400),ex=clamp(400+Math.cos(a)*340,40,760),ey=clamp(300+Math.sin(a)*230,90,520);g.fillStyle='#fc3';g.font='bold 18px sans-serif';g.textAlign='center';g.fillText('★'+d.name+' ▶',ex,ey);g.textAlign='left'}}}
+ if(cur){const q=scr(px(cur.lon),py(cur.lat)),cs=zoomed?5*S:7,r=zoomed?cs*.42:7;
+  if(SG&&live&&SG.god>0)drawGod(g,q[0]+(zoomed?cs*.45:12),q[1]-(zoomed?cs*.75:14),zoomed?cs*1.25:34,SG.god,t);
+  g.fillStyle='rgba(255,40,40,.95)';g.beginPath();g.arc(q[0],q[1],r,0,7);g.fill();g.strokeStyle='#fff';g.lineWidth=3;g.stroke();
+  g.font=(r*1.4)+'px sans-serif';g.textAlign='center';g.fillStyle='#fff';g.fillText('🚃',q[0],q[1]+r*.5);g.textAlign='left'}
+ /* HUD */
+ g.fillStyle='rgba(0,10,25,.82)';g.fillRect(0,0,W,58);
+ if(live){const dn=SGI[SG.dest];
+  text(g,(1+Math.floor(SG.turn/12))+'年目 '+((SG.turn%12)+1)+'月　所持金 '+y(SG.money)+'万円　物件 '+SG.props.length+'/8'+(SG.god>0?'　👹'+GODN[SG.god]:''),10,24,17,'#fc3');
+  text(g,'🎯 '+(dn?dn.name:'?')+'(道のり'+SG.dist+'マス・基礎ボーナス '+y(SG.dist*400)+'万円)',10,48,14);
+ }else text(g,'🚃 日本地図すごろく',10,34,20,'#fc3');
+ text(g,'🪙 '+y(P?P.coins:0),800-10,34,20,'#ffd34d','right');
+ /* ログ */
+ if(SGLOG.length){g.fillStyle='rgba(0,10,25,.6)';g.fillRect(0,438,430,92);SGLOG.slice(0,5).forEach((l,i)=>text(g,l.slice(0,44),8,456+i*17,13,i?'#9bd':'#fff'))}
+ /* 下のボタン */
+ const busy=SGBUSY,dg=live&&SG.dg&&typeof SG.dg=='object'?SG.dg:null;
+ if(live&&!dg){
+  g.fillStyle='rgba(0,10,25,.85)';g.fillRect(0,540,W,80);
+  btn(g,8,548,244,64,'🎲 サイコロ(🪙'+SGCOST+')',()=>roll(),'#d4a017',busy||SGK.panel);
+  btn(g,260,548,150,64,'🃏 カード('+(SG.cards||[]).length+')',()=>{SGK.panel='cards'},null,busy||SGK.panel);
+  btn(g,418,548,150,64,SGK.ov?'📍 ズーム':'🗾 全体',()=>{SGK.ov=!SGK.ov},null,SGK.panel);
+  btn(g,576,548,216,64,'🏁 終了して精算',()=>{SGK.panel='quit'},'#a33',busy||SGK.panel);
+ }
+ /* 目的地ゲーム */
+ if(dg&&!SGK.panel){
+  block();panelBox(g,150,150,500,300,'🎯 目的地ゲーム!');
+  text(g,'終了の目は 【'+dg.a+'】 と 【'+dg.b+'】',400,205,22,'#fff','center');
+  text(g,'この目が出るまで振り続けます(外れ回数×1.5×基礎ボーナス)',400,235,14,'#9bd','center');
+  text(g,'ここまでの外れ: '+dg.n+'回　基礎ボーナス '+y(dg.base)+'万円',400,262,16,'#fc3','center');
+  if(SGK.dice!=null)text(g,'🎲 '+SGK.dice,400,350,64,'#fff','center');
+  btn(g,300,380,200,56,'🎲 振る',()=>dgRoll(),'#d4a017',busy);
+ }
+ /* スタート/結果 */
+ if(!live){
+  block();panelBox(g,120,150,560,300,'🚃 日本地図すごろく');
+  if(SG&&SG.over){text(g,'終了!',400,205,26,'#fc3','center');text(g,'🪙'+y(SG.pay||0)+' を獲得しました',400,245,22,'#fff','center')}
+  else{text(g,'東京をスタートに、36か月プレイします。',400,205,18,'#fff','center');text(g,'サイコロ1回ごとに 🪙'+SGCOST+' かかります。',400,235,16,'#fff','center');
+   text(g,'精算は (最終資産−1億円)÷20 をコインに換算(上限3,000)',400,262,14,'#9bd','center')}
+  btn(g,260,350,280,64,'🚃 スタート',()=>sgStart(),'#d4a017',busy);
+ }
+ /* カード */
+ if(SGK.panel=='cards'&&live){
+  block();panelBox(g,100,80,600,440,'🃏 カード(タップで使用)');
+  (SG.cards||[]).forEach((c,i)=>{const d=SGC[c.c];if(!d)return;btn(g,120+(i%2)*290,110+Math.floor(i/2)*56,280,48,d.name.slice(0,16)+' ×'+c.u,()=>{SGK.panel=null;d.ctype=='dice'?roll(c.c):useCard(c.c)},null,busy)});
+  if(!(SG.cards||[]).length)text(g,'カードを持っていません',400,250,18,'#9bd','center');
+  btn(g,300,460,200,48,'閉じる',()=>{SGK.panel=null},'#a33');
+ }
+ if(SGK.panel=='quit'&&live){
+  block();panelBox(g,150,200,500,200,'精算して終了しますか?');
+  btn(g,190,320,200,56,'はい',()=>{SGK.panel=null;quit()},'#a33');btn(g,410,320,200,56,'いいえ',()=>{SGK.panel=null});
+ }
+ /* リール・演出 */
+ if(SGK.reel){g.fillStyle='rgba(0,0,30,.85)';g.fillRect(100,230,600,130);g.strokeStyle=SGK.reel.fin?'#fc3':'#8cf';g.lineWidth=4;g.strokeRect(100,230,600,130);
+  text(g,'🎰',400,270,28,'#fff','center');text(g,String(SGK.reel.txt).slice(0,28),400,330,SGK.reel.fin?34:28,SGK.reel.fin?'#fc3':'#fff','center')}
+ if(SGK.dice!=null&&!dg){text(g,'🎲 '+SGK.dice,400,200,72,'#fff','center')}
+ if(SGK.big){g.fillStyle='rgba(60,20,90,.88)';g.fillRect(60,250,680,100);text(g,SGK.big,400,312,26,'#ffd',  'center')}
+ if(SGK.toast&&Date.now()<SGK.toast.u){g.fillStyle='rgba(0,0,0,.75)';g.fillRect(100,66,600,36);text(g,SGK.toast.t.slice(0,46),400,91,16,'#fff','center')}
 }
 async function reelAnim(items,pick){
- const e=$('#sgr');if(!e||!items||!items.length)return;
- for(let i=0;i<18;i++){e.textContent='🎰 '+items[Math.floor(Math.random()*items.length)];beep(500+i*20,.04,'square',.03);await sleep(80)}
- e.innerHTML='<span class=c>→ '+esc(items[pick])+'</span>';fanfare();await sleep(600);
+ for(let i=0;i<18;i++){SGK.reel={txt:items[Math.floor(Math.random()*items.length)],fin:false};beep(500+i*20,.04,'square',.03);await sleep(80)}
+ SGK.reel={txt:items[pick],fin:true};fanfare();await sleep(900);SGK.reel=null;
 }
 async function playRes(d){
- for(const p of (d.path||[])){MP=p;drawMap();beep(300+Math.random()*100,.05,'square',.03);await sleep(140)}
- MP=null;SG=d;drawMap();
- for(const e of (d.ev||[])){if(e.items)await reelAnim(e.items,e.pick);SGLOG.unshift(e.msg)}
- SGLOG=SGLOG.slice(0,14);
+ SGK.dice=d.d!=null?d.d:null;
+ for(const p of (d.path||[])){MP=p;beep(300+Math.random()*100,.05,'square',.03);await sleep(150)}
+ MP=null;SG=d;
+ for(const e of (d.ev||[])){SGLOG.unshift(e.msg);SGK.toast={t:e.msg,u:Date.now()+2600};if(e.items)await reelAnim(e.items,e.pick);else await sleep(600)}
+ SGLOG=SGLOG.slice(0,14);SGK.dice=null;
  await refresh();
 }
-async function sgStart(){const {data,error}=await sb.rpc('sg_start');if(error){alert(error.message);return}SG=data;SGLOG=['東京からスタート!'];render()}
-async function roll(c){if(SGBUSY)return;SGBUSY=true;try{const {data,error}=await sb.rpc('sg_roll',{p_card:c||null});if(error)throw error;await playRes(data)}catch(e){alert(e.message)}SGBUSY=false}
-async function useCard(c){if(SGBUSY)return;SGBUSY=true;try{const {data,error}=await sb.rpc('sg_use_card',{p_card:c});if(error)throw error;await playRes(data)}catch(e){alert(e.message)}SGBUSY=false}
+async function sgStart(){if(SGBUSY)return;SGBUSY=true;try{const {data,error}=await sb.rpc('sg_start');if(error)throw error;SG=data;SGLOG=['東京からスタート!'];SGK.ov=false;await refresh()}catch(e){alert(e.message)}SGBUSY=false}
+async function roll(c){if(SGBUSY)return;SGBUSY=true;try{const {data,error}=await sb.rpc('sg_roll',{p_card:c||null});if(error)throw error;await playRes(data)}catch(e){SGK.toast={t:e.message,u:Date.now()+3500}}SGBUSY=false}
+async function useCard(c){if(SGBUSY)return;SGBUSY=true;try{const {data,error}=await sb.rpc('sg_use_card',{p_card:c});if(error)throw error;await playRes(data)}catch(e){SGK.toast={t:e.message,u:Date.now()+3500}}SGBUSY=false}
 async function dgRoll(){
  if(SGBUSY)return;SGBUSY=true;
  try{const {data,error}=await sb.rpc('sg_dg_roll');if(error)throw error;
-  const e=$('#sgr');if(e){for(let i=0;i<10;i++){e.textContent='🎲 '+(1+Math.floor(Math.random()*6));beep(400,.04,'square',.03);await sleep(70)}e.textContent='🎲 '+data.r}
-  await sleep(400);SGLOG.unshift('🎲'+data.r+' '+data.msg);
-  if(data.forgive){const x=$('#sgr');if(x)x.innerHTML='<span class=c>✨ 女神はまだあなたを見捨ててはいない......</span>';beep(880,.5,'sine',.08);await sleep(1400)}
+  for(let i=0;i<10;i++){SGK.dice=1+Math.floor(Math.random()*6);beep(400,.04,'square',.03);await sleep(70)}
+  SGK.dice=data.r;await sleep(500);SGLOG.unshift('🎲'+data.r+' '+data.msg);SGK.toast={t:data.msg,u:Date.now()+2600};
+  if(data.forgive){SGK.big='✨ 女神はまだあなたを見捨ててはいない......';beep(880,.5,'sine',.08);await sleep(1800);SGK.big=null}
   if(data.end)fanfare();
-  SG=data;await refresh();
- }catch(e){alert(e.message)}SGBUSY=false;
+  SG=data;SGK.dice=null;await refresh();
+ }catch(e){SGK.toast={t:e.message,u:Date.now()+3500}}SGBUSY=false;
 }
-async function quit(){if(!confirm('ここで終了して精算しますか?'))return;const {data,error}=await sb.rpc('sg_quit');if(error){alert(error.message);return}SG=data;await refresh()}
+async function quit(){if(SGBUSY)return;SGBUSY=true;try{const {data,error}=await sb.rpc('sg_quit');if(error)throw error;SG=data;await refresh()}catch(e){SGK.toast={t:e.message,u:Date.now()+3500}}SGBUSY=false}
 </script></body></html>
