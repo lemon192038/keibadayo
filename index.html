@@ -1126,87 +1126,142 @@ function cmShow(){
  el.dataset.v=CM.v;
  el.innerHTML=CM.lines.map(l=>'<div class="'+(l.h?'hot':'')+'">'+esc(l.t)+'</div>').join('');
 }
-
-setInterval(()=>{
- const c=$('#cv'),r=vwOn()?VW.r:null;
- if(!c||!r||!me)return;
- if(c.width!=400){c.width=400;c.height=232}
- const g=c.getContext('2d');g.imageSmoothingEnabled=false;
- const t=vwT(),{cx,cy,S,R,W}=TR;
- g.textAlign='left';
- g.fillStyle='#b59a68';g.fillRect(0,0,400,232);
- g.fillStyle='#8c2f2f';g.fillRect(28,5,344,12);g.fillStyle='#c98a8a';g.fillRect(28,5,344,3);
- stad(g,R+W);g.fillStyle=r.surface=='芝'?'#3a9440':'#a9783f';g.fill();
- stad(g,R-W);g.fillStyle='#1f5a2c';g.fill();
- g.strokeStyle='#fff';g.lineWidth=1;stad(g,R+W);g.stroke();stad(g,R-W);g.stroke();
- const total=TL*.9,fs=S*.85,s0=fs-total,fx=cx-S/2+fs;
- for(let k=-W;k<W;k+=2){g.fillStyle=((k+W)/2)%2?'#000':'#fff';g.fillRect(Math.round(fx),cy+R+k,2,2)}
+/* ---------- レース映像(中継風・追従カメラ・ミニマップ) ---------- */
+let FXP=[],FXL=0;
+function mkTex(surface){
+ const t=document.createElement('canvas');t.width=400;t.height=232;const g=t.getContext('2d');
+ let s=7;const rnd=()=>{s=(s*1664525+1013904223)%4294967296;return s/4294967296};
+ const {cx,cy,S,R,W}=TR;
+ g.fillStyle='#8d7650';g.fillRect(0,0,400,232);
+ for(let i=0;i<500;i++){g.fillStyle=rnd()<.5?'#7a6642':'#a08a60';g.fillRect(rnd()*400,rnd()*232,2,2)}
+ /* スタンド */
+ g.fillStyle='#6a2a2a';g.fillRect(24,3,352,16);
+ for(let i=0;i<700;i++){g.fillStyle=['#f55','#fd4','#5af','#fff','#6d6','#f8c'][Math.floor(rnd()*6)];g.fillRect(26+rnd()*348,4+rnd()*14,2,2)}
+ g.fillStyle='#c98a8a';g.fillRect(24,19,352,2);
+ /* 馬場 */
+ const base=surface=='芝'?['#3a9440','#339038']:['#b4834a','#a97a42'];
+ const pth=r=>{g.beginPath();g.moveTo(cx-S/2,cy+r);g.lineTo(cx+S/2,cy+r);g.arc(cx+S/2,cy,r,Math.PI/2,-Math.PI/2,true);g.lineTo(cx-S/2,cy-r);g.arc(cx-S/2,cy,r,-Math.PI/2,Math.PI/2,true);g.closePath()};
+ pth(R+W);g.fillStyle=base[0];g.fill();
+ g.save();pth(R+W);g.clip();
+ for(let k=-W;k<W;k+=6){pth(R+k);g.strokeStyle=((k+W)/6)%2?base[1]:base[0];g.lineWidth=6;g.stroke()}
+ for(let i=0;i<900;i++){g.fillStyle=surface=='芝'?(rnd()<.5?'#2c7c32':'#58b45c'):(rnd()<.5?'#8f6636':'#c89a5e');g.fillRect(rnd()*400,rnd()*232,1,1)}
+ g.restore();
+ pth(R-W);g.fillStyle='#2a6a34';g.fill();
+ for(let i=0;i<300;i++){g.fillStyle='#1f5a2a';g.fillRect(cx-S/2-R+rnd()*(S+2*R),cy-R+rnd()*2*R,1,1)}
+ /* 内ラチ・外ラチ */
+ g.strokeStyle='#fff';g.lineWidth=2;pth(R-W);g.stroke();g.strokeStyle='#ddd';g.lineWidth=1;pth(R+W);g.stroke();
+ /* 木・看板 */
+ for(let i=0;i<14;i++){const x=30+rnd()*340,y=205+rnd()*22;g.fillStyle='#1d4a22';g.beginPath();g.arc(x,y,5+rnd()*4,0,7);g.fill();g.fillStyle='#2f6a30';g.beginPath();g.arc(x-1,y-1,3,0,7);g.fill()}
+ g.fillStyle='#fff';g.fillRect(60,214,40,8);g.fillStyle='#c22';g.fillRect(62,216,36,4);
+ g.fillStyle='#fff';g.fillRect(300,214,40,8);g.fillStyle='#26c';g.fillRect(302,216,36,4);
+ /* ハロン棒(直線に沿って) */
+ for(let i=0;i<8;i++){const x=cx-S/2+S*.85-i*18;g.fillStyle='#fff';g.fillRect(x,cy+R+W+1,2,5);g.fillStyle='#e22';g.fillRect(x,cy+R+W+1,2,2)}
+ return t;
+}
+let TEXC={};
+function drawCam(g,r,t){
+ /* 馬の位置を先に計算 */
+ const {cx,cy,S,R,W}=TR,total=TL*.9,fs=S*.85,s0=fs-total,fx=cx-S/2+fs;
  const E=es(r),n=E.length;
- drawGate(g,s0,n,t);
  const H=E.map((e,i)=>{
   const pl=Math.max(0,r.result.indexOf(e.gate)),Tf=20+pl*.45;
   const p=prog(e,t-GATE_OPEN,Tf,pl==0?.15:.05);
   const off=-(W-5)+2*(W-5)*(n>1?i/(n-1):.5)+Math.sin(t*1.7+i)*1.2;
-  return {e,i,p,off,pl,Tf};
+  const s=s0+p*total,P=tpos(s,off),Q=tpos(s+1,off);
+  return {e,i,p,off,pl,Tf,x:P[0],y:P[1],a:Math.atan2(Q[1]-P[1],Q[0]-P[0]),s};
  });
- H.forEach(h=>{
-  const s=s0+h.p*total,P=tpos(s,h.off),Q=tpos(s+1,h.off);
-  h.x=P[0];h.y=P[1];
-  drawHorse(g,P[0],P[1],Math.atan2(Q[1]-P[1],Q[0]-P[0]),COL[(h.e.gate-1)%12],Math.floor(t*9+h.i)%2);
- });
+ const lead=Math.max(...H.map(h=>h.p));
+ const rk=[...H].sort((a,b)=>(b.p>=1?100-b.pl:b.p)-(a.p>=1?100-a.pl:a.p));
+ return {H,rk,lead,s0,total,fx,n,E};
+}
+setInterval(()=>{
+ const c=$('#cv'),r=vwOn()?VW.r:null;
+ if(!c||!r||!me)return;
+ if(c.width!=800){c.width=800;c.height=464}
+ const g=c.getContext('2d');g.imageSmoothingEnabled=false;
+ const t=vwT(),{cx,cy,S,R,W}=TR;
+ const key=r.surface;if(!TEXC[key])TEXC[key]=mkTex(key);
+ const D2=drawCam(g,r,t),{H,rk,lead,s0,total,n}=D2;
+ /* カメラ: 先頭集団を追従(ズーム) */
+ const top=rk.slice(0,Math.min(3,rk.length));
+ const tx=top.reduce((a,h)=>a+h.x,0)/top.length,ty=top.reduce((a,h)=>a+h.y,0)/top.length;
+ const fin=lead>=1,spread=Math.max(...H.map(h=>Math.hypot(h.x-tx,h.y-ty)));
+ let zs=clamp(150/Math.max(30,spread+25),2.6,4.4);
+ if(t<2.5)zs=2.4;
+ if(!VW.cam)VW.cam={x:tx,y:ty,z:zs};
+ const C=VW.cam,k=Math.min(1,.12+(t<1?.5:0));C.x+=(tx-C.x)*k;C.y+=(ty-C.y)*k;C.z+=(zs-C.z)*.06;
+ const Z=C.z,sx=x=>400+(x-C.x)*Z,sy=y=>232+(y-C.y)*Z;
+ /* 背景(テクスチャを拡大) */
+ g.fillStyle='#6a5a3a';g.fillRect(0,0,800,464);
+ g.save();g.translate(400-C.x*Z,232-C.y*Z);g.scale(Z,Z);g.imageSmoothingEnabled=false;g.drawImage(TEXC[key],0,0);
+ /* ゴール板 */
+ const fxx=D2.fx;g.fillStyle='#fff';g.fillRect(fxx-1,cy+R-W,4,2*W);
+ for(let q=-W;q<W;q+=4){g.fillStyle=((q+W)/4)%2?'#000':'#fff';g.fillRect(fxx+2,cy+R+q,3,4)}
+ g.fillStyle='#e22';g.fillRect(fxx-3,cy+R-W-6,8,6);
+ g.restore();
+ /* ゲート */
+ g.save();g.translate(400-C.x*Z,232-C.y*Z);g.scale(Z,Z);drawGate(g,s0,n,t);g.restore();
+ /* 砂ぼこり・芝飛び */
+ if(t>GATE_OPEN&&lead<1.02){for(const h of H){if(Math.random()<.5&&h.p>0&&h.p<1)FXP.push({x:h.x-Math.cos(h.a)*4,y:h.y-Math.sin(h.a)*4,vx:-Math.cos(h.a)*8+(Math.random()-.5)*10,vy:-Math.sin(h.a)*8+(Math.random()-.5)*10,l:.5,c:r.surface=='芝'?'#9fd48a':'#e0c090'})}}
+ const dtp=.05;FXP=FXP.filter(p=>(p.l-=dtp)>0).slice(-260);
+ FXP.forEach(p=>{p.x+=p.vx*dtp;p.y+=p.vy*dtp;g.globalAlpha=Math.min(1,p.l*2);g.fillStyle=p.c;g.fillRect(sx(p.x),sy(p.y),Math.max(2,Z*.6),Math.max(2,Z*.6))});g.globalAlpha=1;
+ /* 馬(影つき・拡大) */
+ const sorted=[...H].sort((a,b)=>a.y-b.y);
+ for(const h of sorted){
+  const X=sx(h.x),Y=sy(h.y);if(X<-60||X>860||Y<-60||Y>520)continue;
+  g.fillStyle='rgba(0,0,0,.35)';g.beginPath();g.ellipse(X+3,Y+Z*1.6,Z*5.5,Z*2.2,h.a,0,7);g.fill();
+  g.save();g.translate(X,Y);g.scale(Z,Z);g.rotate(0);g.translate(-h.x,-h.y);drawHorse(g,h.x,h.y,h.a,COL[(h.e.gate-1)%12],Math.floor(t*9+h.i)%2);g.restore();
+  g.font='bold 12px sans-serif';g.textAlign='center';g.fillStyle='#000';g.fillText(h.e.gate,X+1,Y-Z*3.4+1);g.fillStyle=COL[(h.e.gate-1)%12];g.fillText(h.e.gate,X,Y-Z*3.4);g.textAlign='left'}
+ /* 勝利演出 */
  const win=H.find(h=>h.pl==0),tw=win?t-GATE_OPEN-win.Tf:-1;
- const rk=[...H].sort((a,b)=>(b.p>=1?100-b.pl:b.p)-(a.p>=1?100-a.pl:a.p)),lead=Math.max(...H.map(h=>h.p));
- if(CM.rid!=r.id)CM={rid:r.id,flags:{},lines:[],v:0,leader:0,lp:0,lt:0,sp:0,beat:0,snap:null,say:0};
+ if(win&&tw>0){const X=sx(win.x),Y=sy(win.y),pu=Math.sin(tw*8)>0;g.strokeStyle=pu?'#ffd700':'#fff';g.lineWidth=3;g.beginPath();g.arc(X,Y,Z*7+Math.sin(tw*6)*3,0,7);g.stroke();
+  for(let q=0;q<50;q++){g.fillStyle=COL[(q+2)%12];g.fillRect(((q*97+Math.sin(tw*2+q)*10+800)%800),((tw*80+q*53)%464),3,3)}}
+ /* 最終直線の演出: 暗いビネット+集中線+フラッシュ */
+ const inStr=lead>.776&&lead<1.02;
+ if(inStr){
+  const vg=g.createRadialGradient(400,232,200,400,232,480);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.55)');g.fillStyle=vg;g.fillRect(0,0,800,464);
+  g.strokeStyle='rgba(255,255,255,.12)';g.lineWidth=2;for(let q=0;q<28;q++){const a=q/28*6.28+t*.2;g.beginPath();g.moveTo(400+Math.cos(a)*300,232+Math.sin(a)*190);g.lineTo(400+Math.cos(a)*520,232+Math.sin(a)*340);g.stroke()}
+  if(Math.random()<.3){for(let q=0;q<10;q++){g.fillStyle='rgba(255,255,255,.9)';g.fillRect(40+Math.random()*720,6+Math.random()*30,3,3)}}
+ }
+ /* ---- 中継テロップ ---- */
+ const spd=CM.sp||0,pace=lead<.2?'—':(spd>.045?'ハイペース':spd>.03?'平均ペース':'スローペース');
+ const distM=parseInt((r.name.match(/(\d{3,4})m/)||[0,1600])[1]),remain=Math.max(0,Math.round(distM*(1-Math.min(1,lead))/ 10)*10);
+ const tt=Math.max(0,t-GATE_OPEN),mm=Math.floor(tt/60),ss=(tt%60);
+ g.fillStyle='rgba(0,20,50,.82)';g.fillRect(0,0,800,30);g.fillStyle='#fc3';g.fillRect(0,30,800,2);
+ g.font='bold 15px sans-serif';g.fillStyle='#fff';g.fillText(rlabel(r)+' '+r.name.replace(/^(G\d|OP) /,'').slice(0,22),8,21);
+ g.textAlign='right';g.fillStyle='#fc3';g.fillText('TIME '+mm+':'+ss.toFixed(1).padStart(4,'0')+'   残り '+remain+'m   '+pace,792,21);g.textAlign='left';
+ /* 順位テロップ(左) */
+ g.fillStyle='rgba(0,20,50,.78)';g.fillRect(0,38,130,18+Math.min(6,rk.length)*20);
+ g.font='bold 12px sans-serif';g.fillStyle='#fc3';g.fillText('順位',6,52);
+ rk.slice(0,6).forEach((h,i)=>{const y2=72+i*20;g.fillStyle=COL[(h.e.gate-1)%12];g.fillRect(6,y2-12,14,14);g.fillStyle=(h.e.gate==1||h.e.gate==5)?'#000':'#fff';g.font='bold 11px sans-serif';g.fillText(h.e.gate,9,y2-1);g.fillStyle='#fff';g.font='12px sans-serif';g.fillText((i+1)+' '+String(h.e.name).slice(0,7),26,y2)});
+ /* ミニマップ(右下) */
+ const mx0=584,my0=330,mw=210,mh=126,ms=mw/400;
+ g.fillStyle='rgba(0,15,35,.85)';g.fillRect(mx0-4,my0-4,mw+8,mh+8);g.strokeStyle='#fc3';g.lineWidth=2;g.strokeRect(mx0-4,my0-4,mw+8,mh+8);
+ g.save();g.beginPath();g.rect(mx0,my0,mw,mh);g.clip();g.translate(mx0,my0);g.scale(mw/400,mh/232);g.imageSmoothingEnabled=false;g.drawImage(TEXC[key],0,0);
+ for(const h of H){g.fillStyle=COL[(h.e.gate-1)%12];g.beginPath();g.arc(h.x,h.y,4.5,0,7);g.fill();g.strokeStyle='#000';g.lineWidth=1;g.stroke()}
+ g.strokeStyle='#fff';g.lineWidth=2;g.strokeRect(C.x-400/Z/2,C.y-232/Z/2,400/Z,232/Z);g.restore();
+ /* 実況テロップ */
+ const msg=lead>=1?'ゴール!':t<GATE_OPEN?'ゲートイン':t<2.5?'スタート!':lead>.776?'最終直線!!':lead>.68?'最終コーナー':'';
+ if(msg){g.font='bold 30px sans-serif';g.textAlign='center';g.lineWidth=6;g.strokeStyle='#000';g.strokeText(msg,400,96);g.fillStyle='#ff0';g.fillText(msg,400,96);g.textAlign='left'}
+ if(win&&tw>0){g.fillStyle='#000';g.fillRect(150,414,500,40);g.fillStyle='#d4a017';g.fillRect(152,416,496,36);g.font='bold 20px sans-serif';g.textAlign='center';g.fillStyle='#000';g.fillText('🏆 1着 '+win.e.gate+'番 '+String(win.e.name).slice(0,16),400,442);g.textAlign='left'}
+ /* 実況・効果音の処理(既存ロジックを維持) */
+ if(CM.rid!=r.id){CM={rid:r.id,flags:{},lines:[],v:0,leader:0,lp:0,lt:0,sp:0,beat:0,snap:null,say:0};VW.cam=null;FXP=[]}
  const F=CM.flags,tn_=Date.now(),nm=h=>h.e.gate+'番 '+h.e.name+(h.e.jockey_id?'('+jn(h.e.jockey_id)+')':'');
  if(t-CM.lt>=.5){CM.sp=(lead-CM.lp)/(t-CM.lt);CM.lp=lead;CM.lt=t}
  if(t>=.2&&!F.gin){F.gin=1;say('各馬、ゲートに収まりました。',0);SFX.gate()}
  if(t>=GATE_OPEN&&!F.st){F.st=1;say('ゲートが開いた! 一斉にスタート!',1);SFX.start()}
- if(F.st&&t>GATE_OPEN+1.5&&lead<.68&&tn_-CM.say>2000){
-  const L=rk[0];
-  if(L.e.gate!=CM.leader){say(CM.leader?'先頭が入れ替わった! '+nm(L)+'!':'飛び出したのは '+nm(L)+'!',0);CM.leader=L.e.gate;CM.say=tn_}
- }
+ if(F.st&&t>GATE_OPEN+1.5&&lead<.68&&tn_-CM.say>2000){const L=rk[0];if(L.e.gate!=CM.leader){say(CM.leader?'先頭が入れ替わった! '+nm(L)+'!':'飛び出したのは '+nm(L)+'!',0);CM.leader=L.e.gate;CM.say=tn_}}
  if(t>GATE_OPEN+6&&!F.pace){F.pace=1;say(CM.sp>.05?'ペースは速い! 先頭集団はハイペース!':'ペースは落ち着いている。各馬、脚を溜めています。',0)}
  if(lead>.68&&!F.cor){F.cor=1;CM.snap={};rk.forEach((h,i)=>{CM.snap[h.e.gate]=i});say('最終コーナーに差しかかる! 後方の馬が動き出す!',1)}
  if(lead>.776&&!F.str){F.str=1;say('さあ直線に入った!!',1);SFX.stretch()}
- if(lead>.84&&!F.chg&&CM.snap){
-  F.chg=1;let best=null,gn=0;
-  rk.forEach((h,i)=>{const d=CM.snap[h.e.gate]-i;if(d>gn){gn=d;best=h}});
-  if(best&&gn>=2)say(nm(best)+' が大外から猛追! '+gn+'頭をごぼう抜き!!',1);
- }
+ if(lead>.84&&!F.chg&&CM.snap){F.chg=1;let best=null,gn=0;rk.forEach((h,i)=>{const d=CM.snap[h.e.gate]-i;if(d>gn){gn=d;best=h}});if(best&&gn>=2)say(nm(best)+' が大外から猛追! '+gn+'頭をごぼう抜き!!',1)}
  if(lead>.92&&!F.fin){F.fin=1;say(nm(rk[0])+' 先頭! 後続が迫る!!',1)}
- if(win&&lead>=1&&!F.goal){
-  F.goal=1;say('ゴール!! 1着は '+nm(win)+'!',1);SFX.goal();
-  if(win.e.owner==me.id)say('🎉 あなたの '+win.e.name+' が勝った!',1);
- }
- if(win&&F.goal&&tw>1.8&&!F.res){
-  F.res=1;const by=[...H].sort((a,b)=>a.pl-b.pl);
-  if(by[1]&&by[2])say('2着 '+nm(by[1])+' / 3着 '+nm(by[2]),0);
- }
+ if(win&&lead>=1&&!F.goal){F.goal=1;say('ゴール!! 1着は '+nm(win)+'!',1);SFX.goal();if(win.e.owner==me.id)say('🎉 あなたの '+win.e.name+' が勝った!',1)}
+ if(win&&F.goal&&tw>1.8&&!F.res){F.res=1;const by=[...H].sort((a,b)=>a.pl-b.pl);if(by[1]&&by[2])say('2着 '+nm(by[1])+' / 3着 '+nm(by[2]),0)}
  if(F.st&&lead<1&&tn_>CM.beat){SFX.hoof();CM.beat=tn_+Math.max(110,300-CM.sp*2400)}
  cmShow();
- g.font='bold 10px monospace';
- rk.slice(0,4).forEach((h,k)=>{
-  g.fillStyle=COL[(h.e.gate-1)%12];g.fillRect(cx-62,cy-6+k*11,6,6);
-  g.fillStyle='#fff';g.fillText((k+1)+' '+String(h.e.name).slice(0,8),cx-53,cy-0+k*11);
- });
- const msg=lead>=1?'ゴール!':t<GATE_OPEN?'ゲートイン':t<2.5?'スタート!':lead>.776?'最終直線!!':lead>.68?'最終コーナー':'';
- if(msg){g.font='bold 14px monospace';g.fillStyle='#000';g.fillText(msg,cx-36,cy-24);g.fillStyle='#ff0';g.fillText(msg,cx-37,cy-25)}
- if(win&&tw>0){
-  const pulse=Math.sin(tw*8)>0;
-  g.strokeStyle=pulse?'#ffd700':'#fff';g.lineWidth=2;
-  g.beginPath();g.arc(Math.round(win.x),Math.round(win.y),7+Math.sin(tw*6)*1.5,0,7);g.stroke();
-  for(let k=0;k<46;k++){
-   const px=(k*97+Math.sin(tw*2+k)*8+400)%400,py=(tw*38+k*53)%232;
-   g.fillStyle=COL[(k+2)%12];g.fillRect(Math.round(px),Math.round(py),2,2);
-  }
-  g.fillStyle='#000';g.fillRect(40,201,320,26);
-  g.fillStyle='#d4a017';g.fillRect(42,203,316,22);
-  g.fillStyle=pulse?'#fff7c2':'#ffd700';g.fillRect(42,203,316,3);
-  g.font='bold 13px monospace';g.textAlign='center';
-  g.fillStyle='#000';g.fillText('🏆 1着 '+win.e.gate+'番 '+String(win.e.name).slice(0,16),200,219);
-  g.textAlign='left';
- }
 },50);
+
 
 /* ---------- 自動更新・レース映像の監視 ---------- */
 setInterval(()=>{
