@@ -36,7 +36,7 @@ const sb=supabase.createClient('https://cntqlqvnruanmawtxiyp.supabase.co','sb_pu
 const $=s=>document.querySelector(s),y=n=>Number(n).toLocaleString();
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let me=null,P=null,tab='fish',RODS=[],rod=1,SG=null;
+let me=null,P=null,tab=(['fish','slot','sg'].includes(new URLSearchParams(location.search).get('g'))?new URLSearchParams(location.search).get('g'):'fish'),RODS=[],rod=1,SG=null;
 let SL={r:['7','BAR','🔔'],msg:'',bet:100,bonus:null,left:0,replay:false,spin:false,stop:[true,true,true],res:null,iv:null,at:null};
 const rcol={ノーマル:'#9ab',レア:'#6af',超レア:'#fc3',ボス:'#f55',伝説:'#c6f',幻:'#fff'};
 const fcol={ノーマル:['#4f6a7a','#b8cfd8'],レア:['#2f5fb5','#bcd4ff'],超レア:['#a8801f','#ffe9a0'],ボス:['#a52020','#ffc0c0'],伝説:['#6a2aa0','#e0c0ff']};
@@ -53,7 +53,7 @@ let SGS=[],SGE=[],SGC={};
 async function boot(){
  const [r,si,gi,st,ed,cd]=await Promise.all([sb.from('rods').select('*').order('id'),sb.rpc('slot_info'),sb.rpc('sg_info'),sb.from('sg_st').select('*').order('idx'),sb.from('sg_edge').select('*').limit(10000),sb.from('sg_cards').select('*')]);
  RODS=r.data||[];
- if(si.data){SL.bonus=si.data.bonus||null;SL.left=si.data.left||0;SL.replay=!!si.data.replay;if(si.data.bet)SL.bet=si.data.bet}
+ if(si.data){SL.bonus=si.data.bonus||null;SL.left=si.data.left||0;SL.replay=!!si.data.replay;SL.ml=si.data.ml||0;if(si.data.bet)SL.bet=si.data.bet}
  SG=gi.data||null;SGS=st.data||[];SGE=(ed.data||[]).filter(e=>e.a<e.b);SGC={};(cd.data||[]).forEach(c=>SGC[c.id]=c);
  await refresh();
 }
@@ -301,6 +301,7 @@ function slot(){
  return '<div class="card'+(bz?' bonus':'')+'"><h3>🎰 スロット <small>(内部抽選・BIG/REG・リプレイ)</small></h3>'
  +(bz?'<div style="font-size:22px;font-weight:700;text-align:center">'+(bz=='big'?'🌟 BIG BONUS':'⭐ REG BONUS')+' 残り'+SL.left+'G(賭け金なし)</div>':'')
  +(SL.replay?'<div style="text-align:center"><b>🔁 リプレイ(次回は賭け金なし・BETは '+y(SL.bet)+' に固定)</b></div>':'')
+  +(SL.ml>0?'<div style="text-align:center"><b class=c>🔥 チャンスゾーン 残り'+SL.ml+'G(ベル・スイカ・チェリー・BIG・REGが出やすい)</b></div>':'')
  +'<div id=reels style="text-align:center;margin:8px 0">'+[0,1,2].map(i=>'<span class=reel id=rl'+i+'>'+SL.r[i]+'</span>').join('')+'</div>'
  +'<div style="text-align:center"><span class=lamp id=lp0></span><span class=lamp id=lp1></span><span class=lamp id=lp2></span></div>'
  +'<p id=slm style="text-align:center;min-height:26px;font-size:18px">'+(SL.msg||'')+'</p>'
@@ -329,7 +330,7 @@ function stopReel(i){
 }
 async function finishSpin(){
  clearInterval(SL.iv);clearTimeout(SL.at);SL.spin=false;
- const d=SL.res;SL.r=d.r;SL.bonus=d.bonus||null;SL.left=d.left||0;SL.replay=!!d.replay;
+ const d=SL.res;SL.r=d.r;SL.bonus=d.bonus||null;SL.left=d.left||0;SL.replay=!!d.replay;SL.ml=d.ml||0;if(d.role=='big')setTimeout(()=>alert('🔥 777!! チャンスゾーン突入(30G)'),300);
  if(d.bet)SL.bet=d.bet;
  const nm={big:'🌟 BIG BONUS!!',reg:'⭐ REG BONUS!',bell:'🔔 ベル',melon:'🍉 スイカ',cherry:'🍒 チェリー',replay:'🔁 リプレイ',miss:'ハズレ'};
  SL.msg='<b class=c>'+(nm[d.role]||'')+(d.pay>0?' +🪙'+y(d.pay):'')+'</b>';
