@@ -1128,6 +1128,7 @@ function cmShow(){
 }
 /* ---------- レース映像(中継風・追従カメラ・ミニマップ) ---------- */
 let FXP=[],FXL=0;
+ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function mkTex(surface){
  const t=document.createElement('canvas');t.width=400;t.height=232;const g=t.getContext('2d');
  let s=7;const rnd=()=>{s=(s*1664525+1013904223)%4294967296;return s/4294967296};
