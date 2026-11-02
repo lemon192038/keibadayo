@@ -84,6 +84,7 @@ let AW={defs:[],t:new Set(),a:new Set(),at:0,kind:'title',f:'all',page:0,q:'',dr
 let BK={open:false,mode:'sell',max:'N',ex:new Set(),sel:null};
 let TUT={on:false,step:0,shown:false};
 let IC={};
+ const gl=(g,t)=>'<a href="games.html?g='+g+'" target="_blank" style="color:#fff;background:#1d5a7a;padding:10px 14px;border-radius:8px;text-decoration:none;margin:3px;white-space:nowrap">'+t+'</a>';
 const jn=id=>{const j=(D.jk||[]).find(x=>x.id==id);return j?j.name:'—'};
 const openList=()=>D.races.filter(r=>r.status=='open').sort((a,b)=>a.id-b.id);
 const rlabel=r=>r.rno?((r.side?'裏':'表')+r.rno+'R'):'特別';
@@ -213,7 +214,7 @@ async function load(){
  if(!me)return;
  if(LD){LDagain=true;return}
  LD=true;
- try{await loadInner()}catch(e){console.error(e)}
+  try{await Promise.race([loadInner(),new Promise((_,j)=>setTimeout(()=>j(new Error('timeout')),20000))])}catch(e){console.error(e)}
  LD=false;
  if(LDagain){LDagain=false;load()}
 }
@@ -340,10 +341,12 @@ function shown(){
 function dmUnread(){return DM.list.filter(m=>m.to_id==me.id&&!m.read).length}
 function render(){
  if(!me||!D.p)return;
+ if(st.tab=='watch'&&vwOn()&&$('#cv'))return;
  const T={race,watch,zukan,stable,bag,shop,jockey,bets,prize,award,rank,code,gacha,chat,dm,profile};
  const un=dmUnread();
  const tabs=[['race','レース'],['watch','📺レース観戦'],['zukan','馬図鑑・購入'],['stable','馬房'],['bag','🎒バッグ'],['shop','🛒ショップ'],['jockey','🏇騎手'],['bets','馬券履歴'],['prize','賞金履歴'],['award','🏅称号・実績'],['rank','ランキング'],['code','🎟コード'],['gacha','🎰ガチャ'],['chat','💬チャット'],['dm','✉️DM'+(un?'('+un+')':'')],['profile','👤プロフィール']];
  $('#app').innerHTML='<header><span onclick="setTab(\'profile\')" style="cursor:pointer">'+ico(me.id,34)+'</span><b>🏇 GWCG</b><span>'+(D.p.title_name?tn(D.p.title_name)+' ':'')+esc(D.p.name)+'</span><span class=c>🪙'+y(shown())+'</span>'
+   +gl('fish','🎣釣り')+gl('sg','🚃すごろく')+gl('slot','🎰スロット')
  +'<button onclick="startTut()">❓</button>'
  +'<button onclick="SND=!SND;if(SND)ac();render()">'+(SND?'🔊':'🔇')+'</button>'
  +'<button onclick="sb.auth.signOut()">ログアウト</button></header>'
@@ -487,19 +490,25 @@ function race(){
 
 /* ---------- レース観戦タブ ---------- */
 function watch(){
- const O=openList(),now=Date.now(),rn=running(),dn=D.races.filter(r=>r.status=='done');
+ function watch(){
+ vwSync();
+ const O=openList(),now=Date.now(),dn=D.races.filter(r=>r.status=='done');
  let h='<div class=card><h3>📺 レース観戦</h3>';
- if(rn){
-  h+='<div>🏁 '+rlabel(rn)+' '+esc(rn.name)+'</div><canvas id=cv></canvas><div class=cm id=cm></div><p><small>払戻しは、映像が終わってから反映されます。</small></p>';
+ if(vwOn()){
+  h+='<div>🏁 '+rlabel(VW.r)+' '+esc(VW.r.name)+'</div><canvas id=cv></canvas><div class=cm id=cm></div><p><small>映像は、結果を受け取った時点から最初から再生します。</small></p>';
  }else{
   const nx=O.find(r=>new Date(r.start_at)>now);
-  h+='<div style="padding:30px 0;text-align:center"><div style="font-size:40px">🏇</div>';
+  h+='<div style="padding:24px 0;text-align:center"><div style="font-size:40px">🏇</div>';
   if(nx)h+='<p>次のレース: <b>'+rlabel(nx)+' '+esc(nx.name)+'</b></p><p>発走まで <b id=wcd class=c style="font-size:28px"></b></p>';
   else h+='<p>次のレースを準備中です…</p>';
   h+='</div>';
+  if(VW.r)h+='<button class=on onclick="VW.t0=Date.now();CM.rid=0;render()">🔁 直近のレースをもう一度見る</button>';
   const last=dn[0];
   if(last)h+='<h4>直近の結果:'+rlabel(last)+' '+esc(last.name)+'</h4><table>'
    +last.result.slice(0,5).map((g,i)=>{const e=last.entries.find(x=>x.gate==g);return '<tr><td>'+(i+1)+'着<td><span class=n>'+g+'</span> '+esc(e?e.name:'')+'<td>'+esc(e?jn(e.jockey_id):'')+'</tr>'}).join('')+'</table>';
+ }
+ return h+'</div>';
+}
  }
  return h+'</div>';
 }
@@ -1123,11 +1132,11 @@ function cmShow(){
 }
 
 setInterval(()=>{
- const c=$('#cv'),r=running();
+ const c=$('#cv'),r=vwOn()?VW.r:null;
  if(!c||!r||!me)return;
  if(c.width!=400){c.width=400;c.height=232}
  const g=c.getContext('2d');g.imageSmoothingEnabled=false;
- const t=(Date.now()-new Date(r.start_at))/1000,{cx,cy,S,R,W}=TR;
+ const t=vwT(),{cx,cy,S,R,W}=TR;
  g.textAlign='left';
  g.fillStyle='#b59a68';g.fillRect(0,0,400,232);
  g.fillStyle='#8c2f2f';g.fillRect(28,5,344,12);g.fillStyle='#c98a8a';g.fillRect(28,5,344,3);
@@ -1218,17 +1227,30 @@ setInterval(()=>{
  const e=$('#shcd');
  if(e){const s=3600-Math.floor(Date.now()/1000)%3600;e.textContent=Math.floor(s/60)+'分'+String(s%60).padStart(2,'0')+'秒'}
 },500);
-let vidId=0;
+ let VW={id:0,r:null,t0:0};
+function vwSync(){
+ const r=D.races.filter(x=>x.status=='done')[0];
+ if(!r||!r.result)return;
+ if(VW.id!=r.id){
+  const el=(Date.now()-new Date(r.start_at))/1000;
+  VW={id:r.id,r:r,t0:el<=4?new Date(r.start_at).getTime():(el<90?Date.now():0)};
+ }else VW.r=r;
+}
+const vwT=()=>VW.t0?(Date.now()-VW.t0)/1000:999;
+const vwOn=()=>!!VW.r&&vwT()<30;
+setInterval(()=>{if(GB&&!document.getElementById('gc'))GB=false},10000);
+let vidOn=false;
 setInterval(()=>{
- if(!me||!D.p||GB)return;
- const r=running();
- if(r){vidId=r.id}
- else if(vidId){
-  const id=vidId;vidId=0;
-  if(D.bets.some(b=>b.race_id==id&&Number(b.payout)>0))SFX.win();
-  render();return;
+ if(!me||!D.p)return;
+ vwSync();
+ const on=vwOn();
+ if(on!==vidOn){
+  vidOn=on;
+  if(!on&&VW.r&&D.bets.some(b=>b.race_id==VW.r.id&&Number(b.payout)>0))SFX.win();
+  if(st.tab=='watch'||st.tab=='race')render();
+  return;
  }
- if((st.tab=='race'||st.tab=='watch')&&st.tab=='watch'&&!!r!==!!$('#cv'))render();
+ if(st.tab=='watch'&&on&&!$('#cv'))render();
 },700);
 let TICKING=false;
 setInterval(async()=>{
