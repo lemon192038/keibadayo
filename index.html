@@ -489,7 +489,6 @@ function race(){
 }
 
 /* ---------- レース観戦タブ ---------- */
-function watch(){
  function watch(){
  vwSync();
  const O=openList(),now=Date.now(),dn=D.races.filter(r=>r.status=='done');
@@ -506,9 +505,6 @@ function watch(){
   const last=dn[0];
   if(last)h+='<h4>直近の結果:'+rlabel(last)+' '+esc(last.name)+'</h4><table>'
    +last.result.slice(0,5).map((g,i)=>{const e=last.entries.find(x=>x.gate==g);return '<tr><td>'+(i+1)+'着<td><span class=n>'+g+'</span> '+esc(e?e.name:'')+'<td>'+esc(e?jn(e.jockey_id):'')+'</tr>'}).join('')+'</table>';
- }
- return h+'</div>';
-}
  }
  return h+'</div>';
 }
