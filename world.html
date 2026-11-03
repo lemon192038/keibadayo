@@ -1,0 +1,121 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>GWCG 新聞・殿堂・大会・クラブ</title>
+<style>
+body{margin:0;font:16px -apple-system,sans-serif;background:#10231a;color:#eee}
+header,nav{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#0a1810;flex-wrap:wrap}header b{flex:1}
+button,a.btn{font-size:16px;padding:10px 14px;margin:3px;border:0;border-radius:8px;background:#2d5a44;color:#fff;text-decoration:none;display:inline-block}
+button.on{background:#d4a017;color:#000}button.s{background:#a33}.c{color:#ffd34d;font-weight:700}
+main{padding:10px}.card{background:#183626;border-radius:10px;padding:10px;margin:8px 0}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px;border-bottom:1px solid #2a4}
+input,select{font-size:16px;padding:8px;margin:4px;border-radius:8px;border:0;-webkit-user-select:text;user-select:text}
+.box{max-width:360px;margin:15vh auto;text-align:center}small{color:#9ab}
+</style></head><body><div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const sb=supabase.createClient('https://cntqlqvnruanmawtxiyp.supabase.co','sb_publishable_28BRrTAEoLeyOgcOCvc9FA_hg5Ej2wC');
+const $=s=>document.querySelector(s),y=n=>Number(n).toLocaleString();
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fm=s=>new Date(s).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+const sec=(t,b)=>'<div class=card><h3>'+t+'</h3>'+b+'</div>';
+const UL=(a,f)=>a&&a.length?'<ul>'+a.map(x=>'<li>'+f(x)+'</li>').join('')+'</ul>':'<p><small>該当なし</small></p>';
+let me=null,P=null,tab=new URLSearchParams(location.search).get('t')||'news';
+const KN={wins:'歴代最多勝利馬',streak:'歴代最多連勝馬',prize:'歴代最高賞金獲得馬',power:'歴代最高能力馬(能力合計)',first_champ:'初代チャンピオン',hall:'殿堂入り',tour:'大会優勝'};
+const PATS={solid:'無地',stripe:'縦縞',dots:'水玉',cross:'十字',hoop:'横縞'};
+function login(){$('#app').innerHTML='<div class=box><h2>🌐 GWCG</h2><input id=u placeholder="アカウント名"><br><input id=pw type=password placeholder="パスワード"><br><button onclick="auth()">ログイン</button></div>'}
+async function auth(){const r=await sb.auth.signInWithPassword({email:$('#u').value.trim()+'@gwc-game.com',password:$('#pw').value});if(r.error)alert(r.error.message)}
+sb.auth.onAuthStateChange((_,s)=>{me=s?s.user:null;if(me)boot();else login()});
+async function boot(){const {data}=await sb.from('profiles').select('name,coins,silk').eq('id',me.id).single();P=data;render()}
+async function call(fn,a,ok){const {data,error}=await sb.rpc(fn,a);if(error){alert(error.message);return null}if(ok)alert(ok);await boot();return data||true}
+async function render(){
+ const tabs=[['news','📰新聞'],['hall','🏛殿堂'],['tour','🏆大会'],['club','👥クラブ'],['silk','👕勝負服'],['course','🌍競馬場']];
+ $('#app').innerHTML='<header><b>🌐 GWCG</b><span>'+esc(P.name)+'</span><span class=c>🪙'+y(P.coins)+'</span><a class=btn href="index.html">🏇 競馬</a></header><nav>'
+  +tabs.map(t=>'<button class="'+(tab==t[0]?'on':'')+'" onclick="tab=\''+t[0]+'\';render()">'+t[1]+'</button>').join('')+'</nav><main id=m>読み込み中…</main>';
+ try{$('#m').innerHTML=await ({news,hall,tour,club,silk,course})[tab]()}catch(e){$('#m').innerHTML='エラー: '+esc(e.message)}
+ if(tab=='silk')drawSilk();
+}
+/* 新聞 */
+async function news(){
+ await sb.rpc('tick');const {data:d,error}=await sb.rpc('newspaper');if(error)throw error;
+ return sec('📰 GWCG 競馬新聞','<small>'+fm(new Date())+' 発行(実際のゲーム内データから自動作成)</small>')
+ +sec('🏁 直近24時間の重賞結果',UL(d.results,x=>esc(x.grade)+' '+esc(x.name)+' 優勝 <b>'+esc(x.w)+'</b>'+(x.w2?' / 2着 '+esc(x.w2):'')))
+ +sec('📅 本日の開催予定',UL(d.schedule,x=>fm(x.start_at)+' '+esc(x.name)+' <small>'+esc(x.course||'')+'</small>'))
+ +sec('⭐ 注目馬(重賞出走馬で強さ上位)',UL(d.notable,x=>'<b>'+esc(x.name)+'</b> — '+esc(x.race)))
+ +sec('🔥 連勝中の馬',UL(d.streaks,x=>'<b>'+esc(x.name)+'</b> '+x.streak+'連勝 <small>馬主 '+esc(x.owner||'—')+'</small>'))
+ +sec('🆕 新記録・殿堂(24時間以内)',UL(d.records,x=>fm(x.at)+' '+esc(KN[x.k]||x.k)+': <b>'+esc(x.horse_name)+'</b> ('+esc(x.owner_name||'—')+') '+y(x.val)))
+ +sec('🏆 大会結果(24時間以内)',UL(d.tours,x=>esc(x.name)+'(主催 '+esc(x.host_name)+')優勝 <b>'+esc(x.champ)+'</b> '+esc(x.owner)));
+}
+/* 殿堂 */
+async function hall(){
+ const {data:d,error}=await sb.rpc('hall_data');if(error)throw error;
+ const my=(await sb.from('horses').select('id,name,wins_t,wins_d').eq('owner',me.id).eq('retired',true)).data||[];
+ const inH=new Set(d.hall.map(h=>h.horse_id)),cand=my.filter(h=>!inH.has(h.id));
+ return sec('📜 歴代記録','<table>'+d.records.map(r=>'<tr><td>'+esc(KN[r.k]||r.k)+'<td><b>'+esc(r.horse_name)+'</b><td>'+esc(r.owner_name||'—')+'<td>'+(r.k=='first_champ'?'':y(r.val))+'<td><small>'+fm(r.at)+'</small></tr>').join('')+'</table>')
+ +sec('📅 年度代表馬(その年の勝利数トップ)',UL(d.yearly,x=>esc(x.y)+'年: <b>'+esc(x.horse_name)+'</b> '+x.n+'勝'))
+ +sec('⚔ 名勝負(重賞の接戦・番狂わせ)',UL(d.epic,x=>esc(x.race_name)+' — <b>'+esc(x.w)+'</b> が '+esc(x.l)+' を下す <small>'+fm(x.at)+'</small>'))
+ +sec('🏛 殿堂入りした馬',UL(d.hall,x=>'<b>'+esc(x.horse_name)+'</b> 馬主 '+esc(x.owner_name)+' / '+x.wins+'勝 / 賞金'+y(x.prize)+' / 能力 '+x.spd+'-'+x.sta+'-'+x.pow))
+ +sec('殿堂入りさせる(引退した自分の馬)',cand.length?cand.map(h=>'<div>'+esc(h.name)+' ('+(h.wins_t+h.wins_d)+'勝) <button onclick="call(\'induct\',{p_hid:'+h.id+'},\'殿堂入りしました!\').then(render)">殿堂入り</button></div>').join(''):'<small>対象の馬がいません</small>');
+}
+/* 大会 */
+const z2=n=>String(n).padStart(2,'0'),ldt=d=>d.getFullYear()+'-'+z2(d.getMonth()+1)+'-'+z2(d.getDate())+'T'+z2(d.getHours())+':'+z2(d.getMinutes());
+async function tour(){
+ await sb.rpc('tick');
+ const [t,e,pt,hs,cl]=await Promise.all([sb.from('tournaments').select('*').order('id',{ascending:false}).limit(15),sb.from('tour_entries').select('*'),sb.from('tour_pts').select('*').order('pts',{ascending:false}).limit(15),
+  sb.from('horses').select('id,name,age,spd,sta,pow').eq('owner',me.id).eq('retired',false),sb.rpc('club_list')]);
+ const T=t.data||[],E=e.data||[],H=hs.data||[];
+ const form=sec('➕ 大会を主催する(🪙1,000)','<input id=tn placeholder="大会名" maxlength=30><br>開催: <input id=ts type=datetime-local value="'+ldt(new Date(Date.now()+10*60000))+'"><br>'
+  +'馬場: <select id=tf><option>芝</option><option>ダート</option></select> 距離: <select id=td>'+[1200,1400,1600,1800,2000,2400,3000].map(x=>'<option'+(x==1600?' selected':'')+'>'+x+'</option>').join('')+'</select><br>'
+  +'年齢上限: <input id=ta type=number value=12 style="width:70px"> 能力合計上限(0=なし): <input id=tp type=number value=0 style="width:90px"> 定員: <input id=tm type=number value=8 style="width:70px"><br>'
+  +'<label><input id=tc type=checkbox> クラブ対抗(ポイント2倍)</label><br><button class=on onclick="mkTour()">大会を作る</button><br><small>賞金は出ません(不正防止のためポイントのみ)。参加は1人1頭です。</small>');
+ const list=T.map(x=>{const en=E.filter(q=>q.tid==x.id),mine=x.host==me.id;
+  let h='<div class=card><b>'+esc(x.name)+'</b> <small>主催 '+esc(x.host_name)+' / '+fm(x.start_at)+' / '+x.surface+x.dist+'m / '+x.max_age+'歳以下'+(x.max_pow?' / 能力合計'+x.max_pow+'以下':'')+(x.club_mode?' / クラブ対抗':'')+' / '+({open:'受付中',done:'終了',cancelled:'中止',void:'不成立'})[x.status]+'</small>';
+  h+='<div>参加 '+en.length+'/'+x.max_n+': '+en.map(q=>esc(q.horse_name)+'('+esc(q.owner_name)+')'+(mine&&x.status=='open'?' <button class=s onclick="call(\'tour_kick\',{p_tid:'+x.id+',p_hid:'+q.horse_id+'}).then(render)">除外</button>':'')).join(' / ')+'</div>';
+  if(x.status=='open'){h+='<select id=h'+x.id+'>'+H.map(q=>'<option value='+q.id+'>'+esc(q.name)+'</option>').join('')+'</select><button onclick="call(\'tour_join\',{p_tid:'+x.id+',p_hid:Number($(\'#h'+x.id+'\').value)},\'参加しました\').then(render)">参加</button>'+(mine?'<button class=s onclick="if(confirm(\'中止しますか?\'))call(\'tour_cancel\',{p_tid:'+x.id+'}).then(render)">大会を中止</button>':'')}
+  if(x.status=='done')h+='<table>'+x.result.map(r=>'<tr><td>'+r.pos+'着<td>'+esc(r.horse)+'<td>'+esc(r.owner)+'<td>'+esc(r.club||'')+'</tr>').join('')+'</table>';
+  return h+'</div>'}).join('');
+ return form+sec('🏆 大会一覧',list||'<small>大会はまだありません</small>')
+  +sec('🥇 大会ランキング(ポイント)','<table>'+(pt.data||[]).map((p,i)=>'<tr><td>'+(i+1)+'<td>'+esc(p.name)+'<td>'+p.pts+'pt<td>'+p.wins+'勝</tr>').join('')+'</table>');
+}
+async function mkTour(){
+ const v=id=>$('#'+id).value;
+ await call('tour_create',{p_name:v('tn'),p_start:new Date(v('ts')).toISOString(),p_surf:v('tf'),p_dist:Number(v('td')),p_age:Number(v('ta')),p_pow:Number(v('tp')),p_n:Number(v('tm')),p_club:$('#tc').checked},'大会を作りました');render();
+}
+/* クラブ */
+async function club(){
+ const [m,l]=await Promise.all([sb.rpc('club_me'),sb.rpc('club_list')]),d=m.data,L=l.data||[];
+ const rank=sec('🏅 クラブランキング(大会ポイント順)','<table><tr><th>順<th>クラブ<th>代表<th>人数<th>pt<th>メンバー賞金</tr>'+L.map((c,i)=>'<tr><td>'+(i+1)+'<td>'+esc(c.name)+'<td>'+esc(c.owner_name)+'<td>'+c.n+'<td>'+c.pts+'<td>'+y(c.prize)+(d?'':'<td><button onclick="call(\'club_join\',{p_id:'+c.id+'},\'加入しました\').then(render)">加入</button>')+'</tr>').join('')+'</table>');
+ if(!d)return sec('クラブを作る(🪙5,000)','<input id=cn placeholder="クラブ名" maxlength=20><button class=on onclick="call(\'club_create\',{p_name:$(\'#cn\').value},\'クラブを作りました\').then(render)">設立</button>')+rank;
+ const ch=(await sb.from('club_chat').select('*').eq('club_id',d.club.id).order('id',{ascending:false}).limit(50)).data||[];
+ return sec('👥 '+esc(d.club.name)+' <small>('+d.club.pts+'pt)</small>','<div>メンバー: '+d.members.map(x=>esc(x.name)+(x.owner?'👑':'')).join(' / ')+'</div><button class=s onclick="if(confirm(\'脱退しますか?\'))call(\'club_leave\',{}).then(render)">脱退</button>')
+  +sec('🐴 クラブ所属馬',UL(d.horses,h=>esc(h.name)+' <small>'+esc(h.owner)+' / '+h.wins+'勝'+(h.retired?' / 引退':'')+'</small>'))
+  +sec('💬 クラブチャット','<div style="max-height:40vh;overflow:auto">'+ch.reverse().map(c=>'<div><small>'+fm(c.at)+'</small> <b>'+esc(c.name)+'</b>: '+esc(c.msg)+'</div>').join('')+'</div><input id=cm maxlength=200 style="width:65%"><button onclick="call(\'club_post\',{p_msg:$(\'#cm\').value}).then(render)">送信</button>')+rank;
+}
+/* 勝負服 */
+function silk(){
+ const s=P.silk||{body:'#e33',sleeve:'#fff',cap:'#222',pat:'solid'};
+ return sec('👕 勝負服デザイン','<canvas id=sc width=180 height=180 style="background:#2a6a34;border-radius:10px"></canvas><br>'
+  +'胴体 <input id=sb type=color value="'+s.body+'" oninput="drawSilk()"> 袖 <input id=ss type=color value="'+s.sleeve+'" oninput="drawSilk()"> 帽子 <input id=sh type=color value="'+s.cap+'" oninput="drawSilk()"><br>'
+  +'模様 <select id=sp onchange="drawSilk()">'+Object.keys(PATS).map(k=>'<option value='+k+(s.pat==k?' selected':'')+'>'+PATS[k]+'</option>').join('')+'</select><br>'
+  +'<button class=on onclick="saveSilk()">保存してレース映像に反映</button><br><small>保存すると、あなたの馬が出走するレース映像の馬(胴・袖・帽子・模様)に反映されます。</small>');
+}
+function drawSilk(){
+ const c=$('#sc');if(!c)return;const g=c.getContext('2d'),b=$('#sb').value,s=$('#ss').value,h=$('#sh').value,p=$('#sp').value;
+ g.clearRect(0,0,180,180);
+ g.fillStyle=s;g.fillRect(20,70,26,70);g.fillRect(134,70,26,70);
+ g.fillStyle=b;g.fillRect(46,64,88,96);
+ g.fillStyle=s;
+ if(p=='stripe'){for(let x=52;x<130;x+=24)g.fillRect(x,64,10,96)}
+ if(p=='hoop'){for(let y2=76;y2<156;y2+=26)g.fillRect(46,y2,88,10)}
+ if(p=='cross'){g.fillRect(84,64,12,96);g.fillRect(46,100,88,12)}
+ if(p=='dots'){for(let x=62;x<130;x+=26)for(let y2=80;y2<156;y2+=28){g.beginPath();g.arc(x,y2,7,0,7);g.fill()}}
+ g.fillStyle='#f1c9a0';g.beginPath();g.arc(90,42,20,0,7);g.fill();
+ g.fillStyle=h;g.beginPath();g.arc(90,38,22,Math.PI,0);g.fill();g.fillRect(68,36,44,6);
+}
+async function saveSilk(){await call('set_silk',{p_body:$('#sb').value,p_sleeve:$('#ss').value,p_cap:$('#sh').value,p_pat:$('#sp').value},'保存しました');render()}
+/* 競馬場 */
+async function course(){
+ const [c,r]=await Promise.all([sb.from('courses').select('*').order('id'),sb.from('races').select('name,start_at,course,cdir').eq('status','open').order('id').limit(12)]);
+ return sec('🌍 世界の競馬場','<table><tr><th>競馬場<th>国<th>回り<th>特徴</tr>'+(c.data||[]).map(x=>'<tr><td>'+esc(x.name)+'<td>'+esc(x.country)+'<td>'+esc(x.dir)+'回り<td>'+esc(x.note)+'</tr>').join('')+'</table><small>開催日ごとに、競馬場が順番に切り替わります。現在の映像は、どの競馬場でも左回りの楕円で描いています。</small>')
+  +sec('📅 これからのレースと開催競馬場',UL(r.data,x=>fm(x.start_at)+' '+esc(x.name)+' <small>'+esc(x.course||'—')+' '+esc(x.cdir||'')+'回り</small>'));
+}
+</script></body></html>
